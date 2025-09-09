@@ -1,44 +1,72 @@
-Self-Service Parking — Analysis Document (Markdown)
-Data Dictionary
+#Data Dictionary
 
-Vehicle / Car — Physical object arriving at the lane; identified by License Plate; starts/ends a Session at entry/exit.
+Vehicle / Car
+Physical object arriving at the lane; identified by License Plate; starts/ends a Session at entry/exit.
 
-License Plate — Alphanumeric ID read by the camera; used to match Whitelist/Blacklist and link Sessions/Payments.
+License Plate
+Alphanumeric ID read by the camera; used to match Whitelist/Blacklist and link Sessions/Payments.
 
-Camera (LPR camera) — Captures the plate at entry/exit; emits a Recognition Event (plate, timestamp, lane, read quality).
+Camera (LPR camera)
+Captures the plate at entry/exit; emits a Recognition Event (plate, timestamp, lane, read quality).
 
-Recognition Event — Immutable record from the camera; may auto-trigger a Barrier Command or (if low read quality) require confirmation in the self-service UI.
+Recognition Event
+Immutable record from the camera; may auto-trigger a Barrier Command or (if low read quality) require confirmation in the self-service UI.
 
-Barrier (Gate) — Physical arm controlled via relay (e.g., Raspberry Pi GPIO) to Open/Deny on decision.
+Barrier (Gate)
+Physical arm controlled via relay (e.g., Raspberry Pi GPIO) to Open/Deny on decision.
 
-Lane / Gate — Physical entry/exit point associated to one camera and one barrier relay.
+Lane / Gate
+Physical entry/exit point associated with one camera and one barrier relay.
 
-Session — Parking transaction for a vehicle:
-{ plate, lane, start_time, end_time, duration, pricing_applied, fee, payment_status }
+Session
+Parking transaction for a vehicle:
+
+{
+plate,
+lane,
+start_time,
+end_time,
+duration,
+pricing_applied,
+fee,
+payment_status
+}
+
+
 Opened on entry; closed on exit.
 
-Pricing Rule — Configuration describing how to compute a fee from a session (e.g., hourly rate, blocks, grace minutes, rounding).
+Pricing Rule
+Configuration describing how to compute a fee from a session (e.g., hourly rate, blocks, grace minutes, rounding).
 
-Payment — Settlement record {amount, method(card-test), time, reference} linked to a session. Card via Stripe (test mode).
+Payment
+Settlement record {amount, method(card-test), time, reference} linked to a session. Card processed via Stripe (test mode).
 
-Payment Status — unpaid | paid | failed | waived; tied to session close/exit logic.
+Payment Status
+One of: unpaid | paid | failed | waived; tied to session close/exit logic.
 
-Whitelist Entry — Authorized plate (e.g., subscriber/tenant) with optional label/expiry; may auto-open and waive/discount fees per policy.
+Whitelist Entry
+Authorized plate (e.g., subscriber/tenant) with optional label/expiry; may auto-open and waive/discount fees per policy.
 
-Blacklist Entry — Blocked plate; denies access and logs an event.
+Blacklist Entry
+Blocked plate; denies access and logs an event.
 
-Dashboard (Admin) — Server-hosted UI for admins: live occupancy, events, lists, pricing, payments overview, and configuration.
+Dashboard (Admin)
+Server-hosted UI for admins: live occupancy, events, lists, pricing, payments overview, and configuration.
 
-Occupancy — Computed count of vehicles currently inside (number of open sessions).
+Occupancy
+Computed count of vehicles currently inside (number of open sessions).
 
-Self-Service UI (Driver App/Web) — Server-hosted UI the Driver uses to look up their plate, view fees, and pay (card test). Also shows receipts and QR/exit token if needed.
+Self-Service UI (Driver App/Web)
+Server-hosted UI the Driver uses to look up their plate, view fees, and pay (card test). Also shows receipts and QR/exit token if needed.
 
-Admin — Staff with elevated privileges (pricing, lists, users/roles, audits, reports).
+Admin
+Staff with elevated privileges (pricing, lists, users/roles, audits, reports).
 
-Driver / Customer — Person paying and passing through the barrier; interacts with the self-service UI.
+Driver / Customer
+Person paying and passing through the barrier; interacts with the self-service UI.
 
-User Groups (no operator)
-Driver (self-service)
+User Groups (No Operator)
+Driver (Self-Service)
 
 Look up their plate/session in the Self-Service UI.
 
@@ -58,51 +86,57 @@ Manage Users/Roles (admin accounts only).
 
 Review Audit Logs and run basic Reports (revenue by period, occupancy by hour).
 
-Functionality & Constraints (incl. design options)
+Functionality & Constraints (Incl. Design Options)
 Core Functionality
 
-Entry: Camera recognizes plate → create Session →
-– if whitelisted, auto-open & (optionally) mark fee waived/discounted;
-– if blacklisted, deny and log.
+Entry:
+Camera recognizes plate → create Session →
+– If whitelisted, auto-open & (optionally) mark fee waived/discounted.
+– If blacklisted, deny and log.
 
-Payment: Driver opens Self-Service UI → enters plate (or scans lane QR) → sees computed fee → pays via Stripe (test) → session marked paid.
+Payment:
+Driver opens Self-Service UI → enters plate (or scans lane QR) → sees computed fee → pays via Stripe (test) → session marked paid.
 
-Exit: Camera recognizes plate → finds paid session → barrier opens; if unpaid, lane signage instructs driver to pay via the UI.
+Exit:
+Camera recognizes plate → finds paid session → barrier opens.
+– If unpaid, lane signage instructs driver to pay via the UI.
 
 Constraints & Policies
 
 Accountless driver flow (no login); session lookup by license plate (optionally last 4 digits + CAPTCHA to deter abuse).
 
-Low read quality at entry/exit: treat as uncertain → prompt driver in the UI to confirm/correct plate; define a retention policy for unpaid/abandoned sessions.
+Low read quality at entry/exit: treat as uncertain → prompt driver in the UI to confirm/correct plate; retention policy for unpaid/abandoned sessions.
 
-Security: Admin accounts required for dashboard; role-based access; payments only via a PCI-compliant provider (Stripe test in MVP).
+Security: Admin accounts required for dashboard; role-based access; payments only via PCI-compliant provider (Stripe test in MVP).
 
 Sessions, Pricing, Payments
 
 Entry opens a Session; Exit closes it and computes fee via the Pricing Rule.
 
-Payments: Card (Stripe test mode) via the payment UI; system stores transaction status/reference.
+Payments: Card (Stripe test mode) via payment UI; system stores transaction status/reference.
 
-Whitelist may imply auto-open and fee = 0 (or discounted). Blacklist implies deny + audit.
+Whitelist may imply auto-open and fee = 0 (or discounted).
+
+Blacklist implies deny + audit.
 
 Roles, Audit, Security
 
-Role-based access: protected actions (pricing, lists, user/role changes) require Admin.
+Role-based access: Protected actions (pricing, lists, user/role changes) require Admin.
 
 Audit required for sensitive actions (pricing changes, list edits, user/role changes, payment status adjustments).
 
-Dashboard is server-hosted on the local network; production packaging/cloud sync is later scope.
+Dashboard is server-hosted on the local network; production packaging/cloud sync is future scope.
 
 Hardware Constraints
 
-Barrier control via Raspberry Pi GPIO / relay (prototype). Safety interlocks assumed external.
+Barrier control via Raspberry Pi GPIO / relay (prototype).
+
+Safety interlocks assumed external.
 
 RTSP camera ingest; recorded clips acceptable during development.
 
-Reporting (groundwork)
+Reporting (Groundwork)
 
-Templates only: revenue by period; occupancy by hour.
+Templates only: Revenue by period; occupancy by hour.
 
 Exports: CSV acceptable for MVP.
-
-ChatGPT can make mistakes. Check important info. See Cookie Preferences.
