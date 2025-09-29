@@ -4,7 +4,7 @@ services:
   db:
     image: postgres:16
     env_file:
-      - ../.env
+      - ../app/.env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -19,7 +19,7 @@ services:
       context: ..
       dockerfile: ops/Dockerfile.api
     env_file:
-      - ../.env
+      - ../app/.env
     environment:
       PYTHONPATH: /app
     volumes:
