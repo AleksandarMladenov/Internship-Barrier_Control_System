@@ -3,7 +3,14 @@ from sqlalchemy import text
 from src.core.settings import settings
 from src.db.database import engine
 
-app = FastAPI(title="Parking API", version="0.0.1")
+from .api.routers import vehicles as vehicles_router
+from .api.routers import drivers as drivers_router
+
+
+app = FastAPI(title="Barrier Control System API")
+app.include_router(vehicles_router.router)
+app.include_router(drivers_router.router)
+
 
 @app.get("/health")
 def health():
