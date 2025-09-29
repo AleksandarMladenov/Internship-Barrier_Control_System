@@ -23,8 +23,10 @@ services:
     environment:
       PYTHONPATH: /app
     volumes:
-      - ../app/api:/app
-      - ./firebase.json:/app/api/creds/firebase.json:ro
+      # mount the whole app folder into the container
+      - ../app:/app
+      # mount the firebase cred to the right place in your tree
+
     depends_on:
       - db
     ports:

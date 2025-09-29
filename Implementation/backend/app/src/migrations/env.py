@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 import os
 import sys
 from logging.config import fileConfig
@@ -16,6 +17,7 @@ if APP_ROOT not in sys.path:
 # --- App imports: metadata + settings --------------------------------------
 from src.models import Base  # Base is re-exported in src/models/__init__.py
 
+import src.models
 # Try to get the DB URL from app settings; fall back to alembic.ini if missing
 DATABASE_URL: str | None = None
 try:

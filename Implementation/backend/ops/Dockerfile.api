@@ -1,6 +1,22 @@
 FROM python:3.11-slim
-WORKDIR /app
-COPY app/api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app/api /app
 
+# System deps (optional but helpful for psycopg)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy and install deps first for better layer caching
+COPY app/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy app code
+COPY app /app
+
+# Make sure PYTHONPATH resolves 'src' package
+ENV PYTHONPATH=/app
+
+EXPOSE 8000
+
+# Default command (the compose file overrides with --reload)
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
