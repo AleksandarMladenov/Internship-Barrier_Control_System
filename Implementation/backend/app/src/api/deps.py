@@ -1,10 +1,12 @@
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
+
 from ..db.database import SessionLocal
 from ..repositories.admin_sqlalchemy import AdminRepository
 from ..repositories.subscription_sqlalchemy import SubscriptionRepository
 from ..repositories.vehicle_sqlalchemy import VehicleRepository
+from ..services.gate import GateService
 from ..services.subscriptions import SubscriptionService
 from ..services.vehicles import VehicleService
 from ..repositories.driver_sqlalchemy import DriverRepository
@@ -16,7 +18,6 @@ from ..repositories.session_sqlalchemy import ParkingSessionRepository
 from ..services.sessions import ParkingSessionService
 from ..repositories.payment_sqlalchemy import PaymentRepository
 from ..services.payments import PaymentService
-
 
 def get_db() -> Session:
     db = SessionLocal()
@@ -52,3 +53,7 @@ def get_session_service(db: Session = Depends(get_db)) -> ParkingSessionService:
 def get_payment_service(db: Session = Depends(get_db)) -> PaymentService:
     repo = PaymentRepository(db)
     return PaymentService(repo)
+
+def get_gate_service(db: Session = Depends(get_db)) -> GateService:
+    return GateService(db)
+

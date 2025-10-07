@@ -2,6 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..models.session import Session as SessionModel
+from datetime import datetime
 
 class ParkingSessionRepository:
     def __init__(self, db: Session):
@@ -42,3 +43,15 @@ class ParkingSessionRepository:
     def delete(self, s: SessionModel) -> None:
         self.db.delete(s)
         self.db.commit()
+
+        def get_recent_open_for_vehicle_since(self, vehicle_id: int, since_utc: datetime):
+            return (
+                self.db.query(SessionModel)
+                .filter(
+                    SessionModel.vehicle_id == vehicle_id,
+                    SessionModel.ended_at.is_(None),
+                    SessionModel.started_at >= since_utc,
+                )
+                .order_by(SessionModel.id.desc())
+                .first()
+            )

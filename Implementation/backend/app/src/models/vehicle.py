@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, ForeignKey, Index, Boolean
 from sqlalchemy.orm import relationship
 from .base import Base
 
@@ -9,10 +9,11 @@ class Vehicle(Base):
     driver_id = Column(Integer, ForeignKey("drivers.id", ondelete="CASCADE"), nullable=False)
     region_code = Column(String(10), nullable=False)
     plate_text = Column(String(16), nullable=False)
+    is_blacklisted = Column(Boolean, nullable=False, default=False)
 
     driver = relationship("Driver", back_populates="vehicles")
     sessions = relationship("Session", back_populates="vehicle", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="vehicle", cascade="all, delete-orphan")
-
+    # ...
 # Fast lookup on plates
 Index("ix_vehicles_plate_unique", Vehicle.region_code, Vehicle.plate_text, unique=True)

@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..models.vehicle import Vehicle
 
@@ -6,7 +7,11 @@ class VehicleRepository:
         self.db = db
 
     def create(self, *, driver_id: int, region_code: str, plate_text: str) -> Vehicle:
-        v = Vehicle(driver_id=driver_id, region_code=region_code, plate_text=plate_text)
+        v = Vehicle(
+            driver_id=driver_id,
+            region_code=region_code.upper().strip(),
+            plate_text=plate_text.upper().strip(),
+        )
         self.db.add(v)
         self.db.commit()
         self.db.refresh(v)
@@ -18,7 +23,10 @@ class VehicleRepository:
     def get_by_plate(self, region_code: str, plate_text: str) -> Vehicle | None:
         return (
             self.db.query(Vehicle)
-            .filter(Vehicle.region_code == region_code, Vehicle.plate_text == plate_text)
+            .filter(
+                func.upper(Vehicle.region_code) == region_code.upper(),
+                func.upper(Vehicle.plate_text) == plate_text.upper(),
+            )
             .first()
         )
 
