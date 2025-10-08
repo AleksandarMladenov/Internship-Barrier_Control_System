@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from ..repositories.session_sqlalchemy import ParkingSessionRepository
 from ..repositories.vehicle_sqlalchemy import VehicleRepository
 from ..repositories.driver_sqlalchemy import DriverRepository  # uses helpers below
+from ..repositories.subscription_sqlalchemy import SubscriptionRepository
+
 
 # Toggle: auto-register unknown plates as "Visitor"
 VISITOR_MODE_ENABLED = True
@@ -20,6 +22,7 @@ class GateService:
         self.sessions = ParkingSessionRepository(db)
         self.vehicles = VehicleRepository(db)
         self.drivers = DriverRepository(db)
+        self.subs = SubscriptionRepository(db)
 
     def _ensure_visitor_driver(self):
         d = self.drivers.get_by_email(VISITOR_DRIVER_EMAIL)
@@ -79,3 +82,63 @@ class GateService:
             "barrier_action": "open",
             "created_at_utc": new_sess.started_at,
         }
+    def handle_exit_scan(self, *, region_code: str, plate_text: str, gate_id: str | None, source: str | None):
+        """
+        Exit logic:
+        - Find vehicle and its open session.
+        - If already ended, return idempotent 'closed'/'open'.
+        - If active subscription (plan.type == 'subscription') at NOW -> end session, open barrier.
+        - Else -> visitor: hold barrier, await payment (Stripe story next).
+        """
+        now = datetime.now(timezone.utc)
+        region_code = region_code.strip().upper()
+        plate_text = plate_text.strip().upper()
+
+        vehicle = self.vehicles.get_by_plate(region_code=region_code, plate_text=plate_text)
+        if not vehicle:
+            # Unknown vehicle at exit: hold (no session to close)
+            return {
+                "session_id": None,
+                "status": "error",
+                "barrier_action": "hold",
+                "detail": "vehicle_not_found",
+            }
+
+        s = self.sessions.get_active_for_vehicle(vehicle.id)
+        if not s:
+            # Graceful invalid order: exit before entry
+            return {
+                "session_id": None,
+                "status": "error",
+                "barrier_action": "hold",
+                "detail": "no_open_session_for_vehicle",
+            }
+
+        # Idempotency: if a race already ended it
+        if s.ended_at is not None:
+            return {
+                "session_id": s.id,
+                "status": "closed",
+                "barrier_action": "open",
+                "detail": "already_closed",
+            }
+
+        # Subscriber check at NOW
+        active_sub = self.subs.get_active_subscription_plan_for_vehicle_at(vehicle.id, now)
+        if active_sub:
+            s = self.sessions.end_session(s, ended_at=now)
+            return {
+                "session_id": s.id,
+                "status": "closed",
+                "barrier_action": "open",
+                "detail": "subscriber_exit",
+            }
+
+        # Visitor branch (Stripe comes next)
+        return {
+            "session_id": s.id,
+            "status": "awaiting_payment",
+            "barrier_action": "hold",
+            "detail": "visitor_exit_payment_required",
+        }
+

@@ -16,3 +16,14 @@ class EntryScanResponse(BaseModel):
     created_at_utc: datetime | None = None
 
     model_config = {"from_attributes": True}
+class ExitScanRequest(BaseModel):
+    region_code: str = Field(..., min_length=1, max_length=10)
+    plate_text: str = Field(..., min_length=2, max_length=16)
+    gate_id: str | None = None
+    source: str | None = None
+
+class ExitScanResponse(BaseModel):
+    session_id: int | None = None
+    status: str                 # "closed" | "awaiting_payment" | "error"
+    barrier_action: str         # "open" | "hold"
+    detail: str | None = None

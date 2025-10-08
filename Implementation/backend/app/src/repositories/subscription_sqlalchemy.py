@@ -1,8 +1,9 @@
 from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from ..models.subscription import Subscription
 from ..models.payment import Payment  # 👈 import payment model
+from ..models.plan import Plan, PlanType
 
 class SubscriptionRepository:
     def __init__(self, db: Session):
@@ -59,3 +60,25 @@ class SubscriptionRepository:
     def delete(self, sub: Subscription) -> None:
         self.db.delete(sub)
         self.db.commit()
+
+    def get_active_subscription_plan_for_vehicle_at(
+                self, vehicle_id: int, at_ts: datetime
+        ) -> Subscription | None:
+            """
+            Return an active subscription for the vehicle at 'at_ts'
+            whose linked plan.type == 'subscription'.
+            """
+            return (
+                self.db.query(Subscription)
+                .join(Plan, Plan.id == Subscription.plan_id)
+                .options(joinedload(Subscription.plan))
+                .filter(
+                    Subscription.vehicle_id == vehicle_id,
+                    Subscription.status == "active",
+                    Subscription.valid_from <= at_ts,
+                    Subscription.valid_to > at_ts,
+                    Plan.type == "subscription",
+                )
+                .order_by(Subscription.valid_to.desc())
+                .first()
+     )

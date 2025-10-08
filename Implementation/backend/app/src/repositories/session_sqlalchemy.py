@@ -44,7 +44,7 @@ class ParkingSessionRepository:
         self.db.delete(s)
         self.db.commit()
 
-        def get_recent_open_for_vehicle_since(self, vehicle_id: int, since_utc: datetime):
+    def get_recent_open_for_vehicle_since(self, vehicle_id: int, since_utc: datetime):
             return (
                 self.db.query(SessionModel)
                 .filter(
@@ -54,4 +54,4 @@ class ParkingSessionRepository:
                 )
                 .order_by(SessionModel.id.desc())
                 .first()
-            )
+    )
