@@ -3,6 +3,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from .pricing import compute_amount_cents
+from ..core.settings import settings
+from ..repositories.plan_sqlalchemy import PlanRepository
 from ..repositories.session_sqlalchemy import ParkingSessionRepository
 from ..repositories.vehicle_sqlalchemy import VehicleRepository
 from ..repositories.driver_sqlalchemy import DriverRepository  # uses helpers below
@@ -23,6 +26,7 @@ class GateService:
         self.vehicles = VehicleRepository(db)
         self.drivers = DriverRepository(db)
         self.subs = SubscriptionRepository(db)
+        self.plans = PlanRepository(db)
 
     def _ensure_visitor_driver(self):
         d = self.drivers.get_by_email(VISITOR_DRIVER_EMAIL)
@@ -135,10 +139,66 @@ class GateService:
             }
 
         # Visitor branch (Stripe comes next)
+        # ---------- Visitor branch ----------
+        # Idempotency: if already priced & awaiting payment, re-use same quote
+        if getattr(s, "status", None) == "awaiting_payment" and s.amount_charged is not None:
+            return {
+                "session_id": s.id,
+                "status": "awaiting_payment",
+                "barrier_action": "hold",
+                "detail": "visitor_exit_payment_required",
+                "amount_cents": s.amount_charged,
+                "currency": s.plan.currency if s.plan else None,
+                "minutes_billable": s.duration,
+                "plan_id": s.plan_id,
+            }
+
+        vplan = self.plans.get_default_visitor_plan()
+        if not vplan or vplan.price_per_minute_cents is None:
+            return {
+                "session_id": s.id,
+                "status": "error",
+                "barrier_action": "hold",
+                "detail": "visitor_plan_not_configured",
+            }
+
+        amount_cents, minutes = compute_amount_cents(
+            s.started_at, now,
+            vplan.price_per_minute_cents,
+            settings.PRICING_GRACE_MINUTES,
+            settings.PRICING_ROUND_UP,
+        )
+
+        # write RM fields
+        s.plan_id = vplan.id
+        s.ended_at = now
+        s.duration = minutes
+        s.amount_charged = amount_cents
+
+        if settings.GRACE_AUTOCLOSE_ENABLED and amount_cents == 0:
+            s.status = "closed"
+            self.db.commit();
+            self.db.refresh(s)
+            return {
+                "session_id": s.id,
+                "status": "closed",
+                "barrier_action": "open",
+                "detail": "grace_exit_free",
+            }
+
+        s.status = "awaiting_payment"
+        self.db.commit();
+        self.db.refresh(s)
+
         return {
             "session_id": s.id,
             "status": "awaiting_payment",
             "barrier_action": "hold",
             "detail": "visitor_exit_payment_required",
+            "amount_cents": s.amount_charged,
+            "currency": vplan.currency,
+            "minutes_billable": minutes,
+            "plan_id": vplan.id,
         }
+
 

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     FIREBASE_STORAGE_BUCKET: Optional[str] = None
 
+    PRICING_GRACE_MINUTES: int = 10
+    PRICING_ROUND_UP: bool = True
+    GRACE_AUTOCLOSE_ENABLED: bool = True
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def build_database_url_if_missing(cls, v, info: ValidationInfo):

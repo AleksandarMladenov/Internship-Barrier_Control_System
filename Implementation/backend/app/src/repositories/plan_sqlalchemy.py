@@ -32,3 +32,11 @@ class PlanRepository:
     def delete(self, plan: Plan) -> None:
         self.db.delete(plan)
         self.db.commit()
+
+    def get_default_visitor_plan(self) -> Plan | None:
+        return (
+            self.db.query(Plan)
+            .filter(Plan.type == PlanType.visitor)
+            .order_by(Plan.id.desc())
+            .first()
+        )

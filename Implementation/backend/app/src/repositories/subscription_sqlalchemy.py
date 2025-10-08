@@ -77,7 +77,7 @@ class SubscriptionRepository:
                     Subscription.status == "active",
                     Subscription.valid_from <= at_ts,
                     Subscription.valid_to > at_ts,
-                    Plan.type == "subscription",
+                    Plan.type == PlanType.subscription,
                 )
                 .order_by(Subscription.valid_to.desc())
                 .first()

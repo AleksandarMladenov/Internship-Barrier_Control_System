@@ -27,3 +27,9 @@ class ExitScanResponse(BaseModel):
     status: str                 # "closed" | "awaiting_payment" | "error"
     barrier_action: str         # "open" | "hold"
     detail: str | None = None
+
+    # visitor pricing echo (optional fields)
+    amount_cents: int | None = None
+    currency: str | None = None
+    minutes_billable: int | None = None
+    plan_id: int | None = None
