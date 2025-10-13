@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+# OpenCV & OCR runtime deps (+ tesseract optional; EasyOCR doesn't need it, but harmless)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 libglib2.0-0 tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements_ocr.txt /app/requirements_ocr.txt
+RUN pip install --no-cache-dir -r /app/requirements_ocr.txt
+
+# The recognizer script
+COPY lp_recognizer.py /app/lp_recognizer.py
+
+# Default to help
+CMD ["python", "lp_recognizer.py", "--help"]
