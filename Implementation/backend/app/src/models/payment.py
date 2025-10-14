@@ -16,5 +16,8 @@ class Payment(Base):
     method = Column(String(32), nullable=True)  # card/cash/etc
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    stripe_checkout_id = Column(String(64), nullable=True, index=True)
+    stripe_payment_intent_id = Column(String(64), nullable=True, index=True)
+
     session = relationship("Session", back_populates="payments")
     subscription = relationship("Subscription")

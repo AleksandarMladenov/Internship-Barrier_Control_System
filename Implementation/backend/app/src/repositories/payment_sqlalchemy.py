@@ -41,3 +41,26 @@ class PaymentRepository:
     def delete(self, p: Payment) -> None:
         self.db.delete(p)
         self.db.commit()
+
+        def get_pending_for_session(self, session_id: int) -> Optional[Payment]:
+            return (
+                self.db.query(Payment)
+                .filter(Payment.session_id == session_id, Payment.status == "pending")
+                .order_by(Payment.id.desc())
+                .first()
+            )
+
+        def attach_stripe_ids(self, p: Payment, *, checkout_id: str | None, payment_intent_id: str | None):
+            if checkout_id:
+                p.stripe_checkout_id = checkout_id
+            if payment_intent_id:
+                p.stripe_payment_intent_id = payment_intent_id
+            self.db.commit();
+            self.db.refresh(p)
+            return p
+
+        def get_by_checkout(self, checkout_id: str) -> Optional[Payment]:
+            return self.db.query(Payment).filter(Payment.stripe_checkout_id == checkout_id).first()
+
+        def get_by_payment_intent(self, pi_id: str) -> Optional[Payment]:
+            return self.db.query(Payment).filter(Payment.stripe_payment_intent_id == pi_id).first()

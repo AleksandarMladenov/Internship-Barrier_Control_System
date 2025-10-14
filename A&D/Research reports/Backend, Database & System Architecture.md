@@ -92,8 +92,8 @@ The Hybrid model combines strong relational guarantees and realtime dashboards, 
 
 4. Comparative Evaluation
 
-| **Criterion**                       | **Postgres-Only**                 | **Firebase-Only**             | **Hybrid (Chosen)**                      |
-| ----------------------------------- | --------------------------------- | ----------------------------- | ---------------------------------------- |
+| **Criteria**                        | **Postgres-Only**                 | **Firebase-Only**             | **Hybrid (Chosen)**                      |
+|-------------------------------------| --------------------------------- | ----------------------------- | ---------------------------------------- |
 | **Barrier reliability & integrity** | High (ACID, transactions)         | Medium (eventual consistency) | High (decisions on Postgres)             |
 | **Decision latency**                | Predictable, <150 ms with indexes | Variable, modeling overhead   | Predictable, <150 ms (Postgres + cache)  |
 | **Payments integration**            | Possible, custom relay            | Native via Functions          | Functions normalize → upsert in Postgres |

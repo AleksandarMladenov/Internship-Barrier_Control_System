@@ -8,4 +8,6 @@ alembic
 pydantic[email]>=2.0
 email-validator>=2.1
 passlib[bcrypt]==1.7.4
+stripe==8.11.0
+
 

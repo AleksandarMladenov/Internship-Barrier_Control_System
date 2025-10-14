@@ -1,12 +1,16 @@
+import stripe
 from fastapi import HTTPException
 from sqlalchemy.orm import Session as SASession
 from typing import Optional
 
+from ..core import settings
 from ..repositories.payment_sqlalchemy import PaymentRepository
 from ..models.payment import Payment
 from ..models.session import Session as SessionModel
 from ..models.subscription import Subscription
 from ..models.plan import Plan
+from ..repositories.plan_sqlalchemy import PlanRepository
+from ..repositories.session_sqlalchemy import ParkingSessionRepository
 from ..schemas.payment import PaymentCreate, PaymentUpdateStatus, PaymentStatus
 
 # Reuse your subscription activation logic
@@ -64,7 +68,7 @@ class PaymentService:
         # Activate only if payment succeeded
         if p.status != "succeeded":
             return
-        # Use existing SubscriptionService logic
+
         sub_repo = SubscriptionRepository(self.db)
         sub_svc = SubscriptionService(sub_repo)
         sub_svc.activate_on_payment(p.subscription_id)
@@ -80,7 +84,7 @@ class PaymentService:
         if p.status == "pending":
             if new_status not in {PaymentStatus.succeeded, PaymentStatus.failed}:
                 raise HTTPException(status_code=400, detail="Only succeeded or failed allowed from pending")
-        # From succeeded: only refunded allowed (business choice)
+        # From succeeded: only refunded allowed
         elif p.status == "succeeded":
             if new_status != PaymentStatus.refunded:
                 raise HTTPException(status_code=400, detail="Only refunded allowed from succeeded")
@@ -105,3 +109,63 @@ class PaymentService:
         if p.status == "succeeded":
             raise HTTPException(status_code=409, detail="Cannot delete succeeded payment; refund instead")
         self.repo.delete(p)
+
+        def _session_repo(self) -> ParkingSessionRepository:
+            return ParkingSessionRepository(self.db)
+
+        def _plan_repo(self) -> PlanRepository:
+            return PlanRepository(self.db)
+
+        def create_checkout_for_session(self, session_id: int) -> dict:
+            sessions = self._session_repo()
+            s = sessions.get(session_id)
+            if not s:
+                raise HTTPException(status_code=404, detail="session_not_found")
+
+            if getattr(s, "status", None) not in (None, "awaiting_payment"):
+                raise HTTPException(status_code=409, detail="session_not_payable")
+
+            if not s.amount_charged or s.amount_charged <= 0 or not s.plan:
+                raise HTTPException(status_code=400, detail="invalid_amount_or_plan")
+
+            # return same pending payment if exists
+            existing = self.repo.get_pending_for_session(session_id)
+            if existing and existing.stripe_checkout_id:
+                return {"checkout_url": f"https://checkout.stripe.com/c/pay/{existing.stripe_checkout_id}"}
+
+            # create pending payment row
+            p = self.repo.create(
+                session_id=session_id,
+                subscription_id=None,
+                status="pending",
+                currency=(s.plan.currency or "EUR").upper(),
+                amount_cents=int(s.amount_charged),
+                method="card",
+            )
+
+            try:
+                cs = stripe.checkout.Session.create(
+                    mode="payment",
+                    currency=p.currency.lower(),
+                    line_items=[{
+                        "price_data": {
+                            "currency": p.currency.lower(),
+                            "unit_amount": p.amount_cents,
+                            "product_data": {"name": f"Parking session #{s.id}"},
+                        },
+                        "quantity": 1,
+                    }],
+                    payment_intent_data={"metadata": {"session_id": s.id, "payment_id": p.id}},
+                    metadata={"session_id": s.id, "payment_id": p.id},
+                    success_url=f"{settings.PUBLIC_BASE_URL}/payments/success?session_id={s.id}",
+                    cancel_url=f"{settings.PUBLIC_BASE_URL}/payments/cancel?session_id={s.id}",
+                )
+            except stripe.error.StripeError:
+                raise HTTPException(status_code=502, detail="stripe_error")
+
+            self.repo.attach_stripe_ids(
+                p,
+                checkout_id=cs.get("id"),
+                payment_intent_id=cs.get("payment_intent"),
+            )
+            return {"checkout_url": cs.get("url")}

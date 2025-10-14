@@ -25,12 +25,13 @@ class Settings(BaseSettings):
     # Third-party (placeholders)
     STRIPE_SECRET: SecretStr = SecretStr("")
     STRIPE_WEBHOOK_SECRET: SecretStr = SecretStr("")
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     FIREBASE_STORAGE_BUCKET: Optional[str] = None
 
-    PRICING_GRACE_MINUTES: int = 10
+    PRICING_GRACE_MINUTES: int = 0
     PRICING_ROUND_UP: bool = True
-    GRACE_AUTOCLOSE_ENABLED: bool = True
+    GRACE_AUTOCLOSE_ENABLED: bool = False
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
