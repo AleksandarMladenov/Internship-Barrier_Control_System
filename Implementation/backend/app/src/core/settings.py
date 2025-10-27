@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     FIREBASE_STORAGE_BUCKET: Optional[str] = None
 
+    # ---- Auth / JWT / Cookies ----
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    SECRET_KEY: SecretStr = SecretStr("dev-change-me")
+    AUTH_COOKIE_NAME: str = "auth"
+    AUTH_COOKIE_SECURE: bool = False
+    AUTH_COOKIE_SAMESITE: str = "lax"
+
     PRICING_GRACE_MINUTES: int = 0
     PRICING_ROUND_UP: bool = True
     GRACE_AUTOCLOSE_ENABLED: bool = False

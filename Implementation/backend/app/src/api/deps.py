@@ -1,8 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import Depends
 
-
-from ..db.database import SessionLocal
 from ..repositories.admin_sqlalchemy import AdminRepository
 from ..repositories.subscription_sqlalchemy import SubscriptionRepository
 from ..repositories.vehicle_sqlalchemy import VehicleRepository
@@ -19,12 +17,7 @@ from ..services.sessions import ParkingSessionService
 from ..repositories.payment_sqlalchemy import PaymentRepository
 from ..services.payments import PaymentService
 
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+from ..db.database import get_db, SessionLocal
 
 def get_vehicle_service(db: Session = Depends(get_db)) -> VehicleService:
     repo = VehicleRepository(db)

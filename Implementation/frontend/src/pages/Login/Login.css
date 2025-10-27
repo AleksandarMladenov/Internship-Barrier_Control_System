@@ -1,0 +1,13 @@
+.login-wrap { display:flex; min-height:100vh; }
+.login-left { flex:1; background:linear-gradient(180deg,#1a9b8a,#0e6a62); color:#fff;
+  display:flex; align-items:center; justify-content:center; }
+.login-right { flex:1; display:flex; flex-direction:column; gap:16px; align-items:center; justify-content:center; }
+.login-form { width:360px; background:#fff; border-radius:16px; padding:24px;
+  box-shadow:0 6px 24px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:10px; }
+.login-form input { height:40px; border:1px solid #d7e0de; border-radius:8px; padding:0 10px; }
+.login-form button { height:44px; border:none; border-radius:10px; background:#356d66; color:#fff; font-weight:700; }
+.forgot { margin:6px 0 2px; color:#6a7c78; font-size:14px; text-align:right; }
+.or { text-align:center; color:#98a7a4; margin:8px 0; }
+.social-row { display:flex; flex-direction:column; gap:10px; }
+.social { height:44px; border:1px solid #d7e0de; border-radius:10px; background:#fff; }
+.error { color:#b3261e; font-size:14px; }

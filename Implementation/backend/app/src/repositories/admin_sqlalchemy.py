@@ -1,6 +1,7 @@
+# backend/app/src/repositories/admin_sqlalchemy.py
 from sqlalchemy.orm import Session
-from sqlalchemy import select
-from ..models.admin import Admin
+from sqlalchemy import select, func
+from ..models.admin import Admin, AdminRole
 
 class AdminRepository:
     def __init__(self, db: Session):
@@ -40,3 +41,9 @@ class AdminRepository:
     def delete(self, admin: Admin) -> None:
         self.db.delete(admin)
         self.db.commit()
+
+    def count_owners(self) -> int:
+        return self.db.execute(
+            select(func.count()).select_from(Admin)
+            .where(Admin.role == AdminRole.owner, Admin.is_active == True)
+        ).scalar_one()
