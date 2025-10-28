@@ -38,3 +38,32 @@
   width:100%; padding:10px; border:1px solid #cfd8dc; border-radius:8px; margin-top:4px;
 }
 .rm-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+
+/* add this back */
+.rm-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #cfd8dc;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all .18s ease;
+}
+.rm-btn.primary {
+  background: #1a9b8a;
+  border-color: #1a9b8a;
+  color: #ffffff;
+}
+
+.rm-btn.primary:hover:not(:disabled) {
+  background: #1fb39e;
+  border-color: #1fb39e;
+  box-shadow: 0 0 10px rgba(26,155,138,0.25);
+  transform: translateY(-1px);
+}
+
+.rm-btn.primary:active {
+  background: #157c6c;
+  border-color: #157c6c;
+  transform: translateY(0);
+}

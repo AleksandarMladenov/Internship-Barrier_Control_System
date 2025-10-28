@@ -1,0 +1,16 @@
+.sb {
+  width: 280px;
+  background: linear-gradient(180deg,#1a9b8a,#0e6a62);
+  color:#e7fffb;
+  display:flex; flex-direction:column; gap:14px;
+  padding:24px 18px;
+}
+.sb-logo { display:flex; align-items:center; gap:10px; font-weight:700; }
+.sb-nav { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+.sb-link { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; color:#e7fffb; text-decoration:none; opacity:.9; }
+.sb-link.active, .sb-link:hover { background:rgba(255,255,255,.1); opacity:1; }
+.sb-footer { margin-top:auto; display:flex; flex-direction:column; gap:10px; }
+.sb-user { font-size:12px; opacity:.85; }
+.sb-logout { display:flex; align-items:center; gap:8px; background:transparent; border:1px solid rgba(255,255,255,.35);
+  color:#fff; padding:8px 10px; border-radius:10px; cursor:pointer; }
+.sb-logout:hover { background:rgba(255,255,255,.1); }

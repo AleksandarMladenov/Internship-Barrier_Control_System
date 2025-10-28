@@ -1,0 +1,47 @@
+.social-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Base style for buttons */
+.social-btn {
+  width: 100%;
+  height: 44px;
+  background: #fff;
+  border: 1px solid #d7e0de;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  font-weight: 600;
+  transition: all .18s ease;
+}
+
+.social-btn:hover {
+  background: #f2f7f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,.05);
+}
+
+.social-btn:active {
+  transform: translateY(0);
+}
+
+/* Brand-specific tweaks */
+.social-btn.google span {
+  color: #3c4043;
+}
+
+.social-btn.apple {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+.social-btn.apple:hover:not(:disabled) {
+  background: #111;
+}

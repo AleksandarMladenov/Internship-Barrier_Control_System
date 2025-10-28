@@ -3,18 +3,20 @@ const BASE = import.meta.env.VITE_API_BASE_URL;
 async function http(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
-    credentials: "include", // ✅ sends cookie to FastAPI
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
   });
-
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
+    let msg = "";
+    try {
+      const data = await res.json();
+      msg = data?.detail || data?.message || "";
+    } catch {}
+    throw new Error(msg || res.statusText);
   }
-
   return res.status === 204 ? null : res.json();
 }
 
@@ -32,6 +34,7 @@ export async function me() {
 export async function logout() {
   return http("/auth/logout", { method: "POST" });
 }
+
 export async function acceptInvite(token, password, name) {
   return http("/auth/accept-invite", {
     method: "POST",
