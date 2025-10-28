@@ -32,3 +32,9 @@ export async function me() {
 export async function logout() {
   return http("/auth/logout", { method: "POST" });
 }
+export async function acceptInvite(token, password, name) {
+  return http("/auth/accept-invite", {
+    method: "POST",
+    body: JSON.stringify({ token, password, name }),
+  });
+}

@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     AUTH_COOKIE_SECURE: bool = False
     AUTH_COOKIE_SAMESITE: str = "lax"
 
+    INVITE_EXPIRES_MINUTES: int = 60 * 24 * 7  # 7 days
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+
+    # Email (optional)
+    EMAIL_ENABLED: bool = False
+    SMTP_HOST: str = "smtp.fastmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    EMAIL_FROM: str = "no-reply@example.com"
+
     PRICING_GRACE_MINUTES: int = 0
     PRICING_ROUND_UP: bool = True
     GRACE_AUTOCLOSE_ENABLED: bool = False
