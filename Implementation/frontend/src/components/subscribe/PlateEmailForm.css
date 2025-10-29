@@ -1,0 +1,48 @@
+.plate-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+  margin-top: 10px;
+}
+
+.plate-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  color: #0e4a4a;
+}
+
+.plate-form input {
+  border: 1px solid #cfe5e5;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  background: white;
+  outline: none;
+}
+
+.plate-form input:focus {
+  border-color: #0d5959;
+  box-shadow: 0 0 0 3px rgba(13,89,89,0.12);
+}
+
+.submit-btn {
+  grid-column: 1 / -1;
+  background: #0d5959;
+  color: white;
+  font-weight: 800;
+  border: 0;
+  padding: 14px 18px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform .05s ease;
+}
+
+.submit-btn:active { transform: translateY(1px); }
+
+.tiny {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  color: #6a8a8a;
+  font-size: 12px;
+}

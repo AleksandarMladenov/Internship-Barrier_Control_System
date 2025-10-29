@@ -8,8 +8,7 @@ class PlanType(str, Enum):
 
 class BillingPeriod(str, Enum):
     month = "month"
-    week = "week"
-    day = "day"
+    year = "year"
 
 class PlanBase(BaseModel):
     type: PlanType
@@ -21,13 +20,13 @@ class PlanBase(BaseModel):
 
     @model_validator(mode="after")
     def validate_combo(self):
-        # Normalize currency -> uppercase
+
         self.currency = self.currency.upper()
 
         if self.type == PlanType.subscription:
             if self.period_price_cents is None or self.billing_period is None:
                 raise ValueError("Subscription plans require period_price_cents and billing_period")
-            # price_per_minute_cents can be present (for overage) or None
+
         else:  # visitor
             if self.price_per_minute_cents is None:
                 raise ValueError("Visitor plans require price_per_minute_cents")
@@ -39,7 +38,7 @@ class PlanCreate(PlanBase):
     pass
 
 class PlanUpdate(BaseModel):
-    # Partial update—but we’ll re-validate combos in the service using existing + patch
+
     type: Optional[PlanType] = None
     currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     period_price_cents: Optional[int] = Field(default=None, ge=0)

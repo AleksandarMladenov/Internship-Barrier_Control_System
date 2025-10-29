@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile.ocr
     container_name: ops-ocr
     environment:
-      - API_BASE=http://api:8000        # talk to your API by service name
+      - API_BASE=http://api:8000/api       # talk to your API by service name
       - REGION_CODE=BG
       - GATE_ID=GATE-A
       - MODE=entry                      # change to "exit" for exit flow

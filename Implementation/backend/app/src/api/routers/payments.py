@@ -1,7 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Request
 import stripe
-from fastapi import APIRouter, Depends, Query, HTTPException
 
 from ..deps import get_payment_service, get_db
 from ...core.settings import settings
@@ -9,6 +8,9 @@ from ...repositories.payment_sqlalchemy import PaymentRepository
 from ...repositories.session_sqlalchemy import ParkingSessionRepository
 from ...services.payments import PaymentService
 from ...schemas.payment import PaymentCreate, PaymentRead, PaymentUpdateStatus, PaymentStatus
+from ...models.subscription import Subscription
+
+
 
 # Stripe currency minimums
 STRIPE_MIN_AMOUNT = {
@@ -159,8 +161,27 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
     payments = PaymentRepository(db)
     sessions = ParkingSessionRepository(db)
 
+    # 1) Subscription checkout completed
     if event["type"] == "checkout.session.completed":
         data = event["data"]["object"]
+        mode = data.get("mode")
+
+        # Subscription checkout
+        if mode == "subscription":
+            stripe_sub_id = data.get("subscription")
+            metadata = data.get("metadata") or {}
+            sub_id = metadata.get("subscription_id")
+
+            if sub_id and stripe_sub_id:
+                sub = db.get(Subscription, int(sub_id))
+                if sub:
+                    sub.stripe_subscription_id = stripe_sub_id
+                    # still pending payment until first invoice succeeds
+                    db.commit();
+                    db.refresh(sub)
+            return {"ok": True}
+
+        #  Visitor checkout
         pid = int(data.get("metadata", {}).get("payment_id", "0") or "0")
         if pid:
             p = payments.get(pid)
@@ -173,5 +194,46 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
                         sessions.db.commit()
         return {"ok": True}
 
-    # acknowledge other events idempotently
+    # 2) First charge & renewals for subscriptions
+    if event["type"] == "invoice.payment_succeeded":
+        invoice = event["data"]["object"]
+        stripe_sub_id = invoice.get("subscription")
+
+        if stripe_sub_id:
+            sub = db.query(Subscription).filter(
+                Subscription.stripe_subscription_id == stripe_sub_id
+            ).first()
+            if sub and sub.status != "active":
+                sub.status = "active"
+                db.commit();
+                db.refresh(sub)
+
+        return {"ok": True}
+
+    # 3) Subscription canceled
+    if event["type"] in {
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+    }:
+        stripe_obj = event["data"]["object"]
+        stripe_sub_id = stripe_obj.get("id")
+        status = stripe_obj.get("status")
+
+        sub = db.query(Subscription).filter(
+            Subscription.stripe_subscription_id == stripe_sub_id
+        ).first()
+
+        if sub:
+            if status in {"active", "trialing"}:
+                sub.status = "active"
+            elif status in {"past_due", "unpaid"}:
+                sub.status = "paused"
+            elif status == "canceled":
+                sub.status = "canceled"
+            db.commit();
+            db.refresh(sub)
+
+        return {"ok": True}
+
+    # Fallback
     return {"ok": True}

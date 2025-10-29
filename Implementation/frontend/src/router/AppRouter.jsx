@@ -3,6 +3,8 @@ import LoginPage from "../pages/Login/LoginPage";
 import AcceptInvitePage from "../pages/AcceptInvite/AcceptInvitePage";
 import RoleManagementPage from "../pages/RoleManagement/RoleManagementPage";
 import ProtectedRoute from "./ProtectedRoute";
+import SubscriptionPage from "../pages/Subscribe/SubscriptionPage";
+
 
 export default function AppRouter() {
   return (
@@ -10,10 +12,11 @@ export default function AppRouter() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/accept-invite" element={<AcceptInvitePage />} />
+        <Route path="/subscribe" element={<SubscriptionPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/admins" element={<RoleManagementPage />} />
-          {/* stubs for the left-rail links so the nav highlights correctly */}
+        
           <Route path="/reports" element={<Navigate to="/admins" replace />} />
           <Route path="/analytics" element={<Navigate to="/admins" replace />} />
           <Route path="/settings" element={<Navigate to="/admins" replace />} />

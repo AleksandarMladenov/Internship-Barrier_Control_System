@@ -86,3 +86,61 @@ def require_role(min_role: AdminRole):
             raise HTTPException(status_code=403, detail="Permission denied")
         return current
     return dependency
+
+# ---------------- Subscription ownership verification tokens ----------------
+
+def _secret_value() -> str:
+    return (
+        settings.SECRET_KEY.get_secret_value()
+        if hasattr(settings.SECRET_KEY, "get_secret_value")
+        else settings.SECRET_KEY
+    )
+
+def create_plate_claim_token(
+    *,
+    driver_id: int,
+    region_code: str,
+    plate_text: str,
+    plan_id: int,
+    expires_delta: Optional[timedelta] = None,
+) -> str:
+    """
+    Short-lived token used in the verification email link.
+    Encodes who is claiming which plate and for which plan.
+    """
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=24))
+    to_encode = {
+        "typ": "plate_claim",
+        "driver_id": int(driver_id),
+        "region_code": region_code.strip().upper(),
+        "plate_text": plate_text.strip().upper(),
+        "plan_id": int(plan_id),
+        "exp": expire,
+    }
+    return jwt.encode(to_encode, _secret_value(), algorithm=ALGORITHM)
+
+def decode_plate_claim_token(token: str) -> dict:
+    """
+    Validates and decodes the claim token. Raises HTTP 400/401 on problems.
+    Returns a dict with: driver_id, region_code, plate_text, plan_id.
+    """
+    try:
+        payload = jwt.decode(token, _secret_value(), algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired verification token")
+
+    if payload.get("typ") != "plate_claim":
+        raise HTTPException(status_code=400, detail="Invalid token type")
+
+    required = ("driver_id", "region_code", "plate_text", "plan_id")
+    missing = [k for k in required if k not in payload]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Token missing fields: {', '.join(missing)}")
+
+    return {
+        "driver_id": int(payload["driver_id"]),
+        "region_code": str(payload["region_code"]).strip().upper(),
+        "plate_text": str(payload["plate_text"]).strip().upper(),
+        "plan_id": int(payload["plan_id"]),
+    }
+

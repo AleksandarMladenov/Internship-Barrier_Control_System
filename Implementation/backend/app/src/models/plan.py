@@ -9,16 +9,17 @@ class PlanType(str, enum.Enum):
 
 class BillingPeriod(str, enum.Enum):
     month = "month"
-    week = "week"
-    day = "day"
+    year = "year"
 
 class Plan(Base):
     __tablename__ = "plans"
 
     id = Column(Integer, primary_key=True, index=True)
-    type = Column(Enum(PlanType), nullable=False)  # From ERD: Type (Sub, Visitor…)
-    currency = Column(String(3), nullable=False)   # ISO-4217 like "EUR"
+    type = Column(Enum(PlanType), nullable=False)
+    currency = Column(String(3), nullable=False)
     period_price_cents = Column(Integer, nullable=True)        # for subscriptions
-    price_per_minute_cents = Column(Integer, nullable=True)    # for visitor/overage
+    price_per_minute_cents = Column(Integer, nullable=True)    # for visitor
     billing_period = Column(Enum(BillingPeriod), nullable=True) # if subscription
-    method = Column(String(32), nullable=True) # e.g., "card", "cash" (as shown in ERD)
+    method = Column(String(32), nullable=True) # e.g., "card" (optional)
+
+    stripe_price_id = Column(String(64), nullable=True, index=True)

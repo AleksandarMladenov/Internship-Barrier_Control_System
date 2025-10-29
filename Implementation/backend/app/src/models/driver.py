@@ -10,3 +10,4 @@ class Driver(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
 
     vehicles = relationship("Vehicle", back_populates="driver", cascade="all, delete-orphan")
+    stripe_customer_id = Column(String(64), nullable=True, index=True)

@@ -1,0 +1,62 @@
+.plan-card {
+  background: linear-gradient(180deg, #f7fefe 0%, #e0f2f2 100%);
+  border: 1px solid #cde3e3;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 14px 28px rgba(0,0,0,0.08);
+}
+
+.car-illus {
+  height: 140px;
+  background: radial-gradient(ellipse at center, #d7efef 0%, #bfe1e1 60%, #a1cfcf 100%);
+}
+
+.plan-body {
+  padding: 18px;
+}
+
+.plan-title {
+  font-size: 28px;
+  margin: 8px 0 2px;
+  font-weight: 800;
+}
+
+.plan-price {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0d5959;
+  margin-bottom: 10px;
+}
+
+.plan-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 14px 0;
+}
+
+.plan-bullets li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.check { color: #0d5959; font-weight: 900; }
+
+.plan-cta {
+  width: 100%;
+  background: #0d5959;
+  color: white;
+  font-weight: 800;
+  border: 0;
+  padding: 12px 16px;
+  border-radius: 999px;
+  cursor: default;
+  opacity: 0.6;
+}
+
+.plan-foot {
+  color: #6b8b8b;
+  font-size: 12px;
+  margin-top: 8px;
+}

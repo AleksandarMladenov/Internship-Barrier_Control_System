@@ -14,5 +14,6 @@ class Subscription(Base):
     valid_from = Column(DateTime(timezone=True), nullable=False)
     valid_to = Column(DateTime(timezone=True), nullable=False)
 
+    stripe_subscription_id = Column(String(64), nullable=True, index=True)
     vehicle = relationship("Vehicle", back_populates="subscriptions")
     plan = relationship("Plan")

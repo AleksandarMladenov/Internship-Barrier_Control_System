@@ -1,0 +1,23 @@
+.toggle-tabs {
+  display: inline-flex;
+  background: #e3f0f0;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid #cfe5e5;
+}
+
+.tab {
+  border: 0;
+  background: transparent;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #0e4a4a;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #0d5959;
+  color: white;
+  box-shadow: 0 6px 18px rgba(13, 89, 89, 0.35);
+}
