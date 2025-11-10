@@ -1,6 +1,9 @@
 from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
+
+from .session_sqlalchemy import ParkingSessionRepository
+from ..models import Vehicle
 from ..models.subscription import Subscription
 from ..models.payment import Payment  # 👈 import payment model
 from ..models.plan import Plan, PlanType
@@ -82,3 +85,51 @@ class SubscriptionRepository:
                 .order_by(Subscription.valid_to.desc())
                 .first()
      )
+    def suspend_all_for_vehicle(self, vehicle_id: int) -> int:
+        """Set status='suspended' for currently active subscriptions within validity window."""
+        now = datetime.utcnow()
+        q = (
+            self.db.query(Subscription)
+            .filter(
+                Subscription.vehicle_id == vehicle_id,
+                Subscription.status == "active",
+                Subscription.valid_from <= now,
+                Subscription.valid_to > now,
+            )
+        )
+        updated = q.update({Subscription.status: "suspended"}, synchronize_session=False)
+        self.db.commit()
+        return int(updated)
+
+    def resume_all_for_vehicle(self, vehicle_id: int) -> int:
+
+        now = datetime.utcnow()
+        q = (
+            self.db.query(Subscription)
+            .filter(
+                Subscription.vehicle_id == vehicle_id,
+                Subscription.status == "suspended",
+                Subscription.valid_from <= now,
+                Subscription.valid_to > now,
+            )
+        )
+        updated = q.update({Subscription.status: "active"}, synchronize_session=False)
+        self.db.commit()
+        return int(updated)
+
+
+    def delete_if_blacklisted(self, vehicle_id: int) -> bool:
+        v = self.db.get(Vehicle, vehicle_id)
+        if not v or not v.is_blacklisted:
+            return False
+
+        try:
+            sessions = ParkingSessionRepository(self.db)
+            active = sessions.get_active_for_vehicle(v.id)
+            if active:
+                sessions.end_session(active)
+        except Exception:
+            pass
+        self.db.delete(v)
+        self.db.commit()
+        return True

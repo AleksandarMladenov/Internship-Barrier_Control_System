@@ -2,7 +2,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
@@ -10,6 +11,8 @@ from ..core.settings import settings
 from ..db.database import get_db
 from ..repositories.admin_sqlalchemy import AdminRepository
 from ..models.admin import AdminRole
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 ALGORITHM = "HS256"
 
@@ -45,8 +48,18 @@ def create_access_token(*, subject: str | int, expires_delta: Optional[timedelta
     return jwt.encode(to_encode, secret, algorithm=ALGORITHM)
 
 # ---------------- Current user ----------------
-async def get_current_admin(request: Request, db=Depends(get_db)):
+async def get_current_admin(
+    request: Request,
+    db=Depends(get_db),
+    creds: HTTPAuthorizationCredentials | None = Security(bearer_scheme),  # ✅ new line
+):
+
     token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+
+
+    if not token and creds:
+        token = creds.credentials
+
 
     if not token:
         auth_header = request.headers.get("Authorization", "")
@@ -57,7 +70,11 @@ async def get_current_admin(request: Request, db=Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     try:
-        secret = settings.SECRET_KEY.get_secret_value() if hasattr(settings.SECRET_KEY, "get_secret_value") else settings.SECRET_KEY
+        secret = (
+            settings.SECRET_KEY.get_secret_value()
+            if hasattr(settings.SECRET_KEY, "get_secret_value")
+            else settings.SECRET_KEY
+        )
         payload = jwt.decode(token, secret, algorithms=[ALGORITHM])
         sub = payload.get("sub")
         if sub is None:
@@ -71,6 +88,7 @@ async def get_current_admin(request: Request, db=Depends(get_db)):
         raise HTTPException(status_code=401, detail="User no longer exists")
     if not admin.is_active:
         raise HTTPException(status_code=403, detail="Account disabled")
+
     return admin
 
 # ---------------- RBAC ----------------

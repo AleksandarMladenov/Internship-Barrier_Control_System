@@ -3,6 +3,7 @@ import { FiTruck, FiLock, FiFileText, FiBarChart2, FiSettings, FiLogOut } from "
 import { useAuth } from "../../hooks/useAuth";
 import "./Sidebar.css";
 
+
 export default function Sidebar() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
@@ -22,6 +23,10 @@ export default function Sidebar() {
       <nav className="sb-nav">
         <NavLink to="/admins" className="sb-link">
           <FiLock /><span>Role Management</span>
+        </NavLink>
+        <NavLink to="/admin/authorization" className="sb-link">
+          <FiTruck />
+          <span>Authorization</span>
         </NavLink>
         <NavLink to="/reports" className="sb-link">
           <FiFileText /><span>Reports</span>

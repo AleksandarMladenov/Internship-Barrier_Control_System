@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Body
 from sqlalchemy.orm import Session
 
 # Repos & DB
@@ -18,6 +18,7 @@ from ...schemas.admin import (
     AdminInviteIn,
     AdminInviteOut,
 )
+from ...services.access_list import AccessListService
 
 # Services (you already had these wired)
 from ...services.admins import AdminService
@@ -245,3 +246,51 @@ def delete_admin(admin_id: int, svc: AdminService = Depends(get_admin_service)):
         svc.delete(admin_id)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.post("/access/blacklist/{vehicle_id}")
+def admin_blacklist_vehicle(
+    vehicle_id: int,
+    reason: str | None = Body(None),
+    db: Session = Depends(get_db),
+    current_admin = Depends(require_role(AdminRole.admin)),
+):
+    svc = AccessListService(db)
+    try:
+        v = svc.blacklist(admin_id=current_admin.id, vehicle_id=vehicle_id, reason=reason)
+        return {"vehicle_id": v.id, "is_blacklisted": v.is_blacklisted, "status": "ok"}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="vehicle_not_found")
+
+@router.post("/access/whitelist/{vehicle_id}")
+def admin_whitelist_vehicle(
+    vehicle_id: int,
+    reason: str | None = Body(None),
+    resume_suspended: bool = False,
+    db: Session = Depends(get_db),
+    current_admin = Depends(require_role(AdminRole.admin)),
+):
+    svc = AccessListService(db)
+    try:
+        v = svc.whitelist(admin_id=current_admin.id, vehicle_id=vehicle_id, reason=reason, resume_suspended=resume_suspended)
+        return {"vehicle_id": v.id, "is_blacklisted": v.is_blacklisted, "status": "ok"}
+    except ValueError:
+        raise HTTPException(status_code=404, detail="vehicle_not_found")
+
+@router.delete("/access/blacklist/{vehicle_id}")
+def admin_delete_blacklisted_vehicle(
+    vehicle_id: int,
+    reason: str | None = Body(None),
+    db: Session = Depends(get_db),
+    current_admin = Depends(require_role(AdminRole.admin)),
+):
+    svc = AccessListService(db)
+    try:
+        svc.delete_blacklisted(admin_id=current_admin.id, vehicle_id=vehicle_id, reason=reason)
+        return {"vehicle_id": vehicle_id, "deleted": True, "status": "ok"}
+    except ValueError as e:
+        detail = str(e)
+        if detail == "vehicle_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        if detail == "vehicle_not_blacklisted":
+            raise HTTPException(status_code=409, detail=detail)
+        raise HTTPException(status_code=400, detail="delete_failed")

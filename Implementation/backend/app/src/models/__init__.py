@@ -8,3 +8,5 @@ from .session import Session
 from .plan import Plan
 from .subscription import Subscription
 from .payment import Payment
+from .audit import AuditEvent
+

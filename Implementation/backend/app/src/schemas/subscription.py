@@ -7,6 +7,7 @@ class SubscriptionStatus(str, Enum):
     active = "active"
     paused = "paused"
     canceled = "canceled"
+    suspended = "suspended"
 
 class SubscriptionBase(BaseModel):
     vehicle_id: int
@@ -27,8 +28,8 @@ class SubscriptionRead(SubscriptionBase):
 
 class SubscriptionStatusUpdate(BaseModel):
     status: SubscriptionStatus = Field(description="active | paused | canceled")
-    auto_renew: bool | None = None  # optional toggle when changing status
+    auto_renew: bool | None = None
 
-# Optional: tiny schema for payment webhooks / internal calls
+# tiny schema for payment webhooks / internal calls
 class SubscriptionActivateOnPayment(BaseModel):
     payment_id: int

@@ -10,7 +10,7 @@ from ..repositories.subscription_sqlalchemy import SubscriptionRepository
 class SubscriptionService:
     def __init__(self, repo: SubscriptionRepository):
         self.repo = repo
-        self.db: Session = repo.db  # reuse the session held by the repo
+        self.db: Session = repo.db
 
     def _ensure_refs(self, vehicle_id: int, plan_id: int) -> Plan:
         if self.db.get(Vehicle, vehicle_id) is None:
@@ -38,7 +38,7 @@ class SubscriptionService:
         self._ensure_refs(vehicle_id, plan_id)
         self._validate_range(valid_from, valid_to)
 
-        # Still block overlaps with existing *active* subs
+
         if self.repo.has_overlapping_active(vehicle_id, valid_from, valid_to):
             raise HTTPException(status_code=409, detail="Overlapping active subscription exists")
 
@@ -65,7 +65,7 @@ class SubscriptionService:
         if not self.repo.has_successful_payment(sub.id):
             raise HTTPException(status_code=409, detail="No successful payment for this subscription")
 
-        # Optional: sanity on time window
+
         now = datetime.now(timezone.utc)
         if sub.valid_to <= now:
             raise HTTPException(status_code=400, detail="Subscription validity window has already ended")
@@ -75,16 +75,34 @@ class SubscriptionService:
 
     def set_status(self, sub_id: int, *, status: str, auto_renew: bool | None) -> Subscription:
         sub = self.get(sub_id)
+        vehicle = self.db.get(Vehicle, sub.vehicle_id)
 
         # Guard rails: can’t force 'active' without a succeeded payment
         if status == "active":
-            return self._ensure_payment_then_activate(sub)
+            sub = self._ensure_payment_then_activate(sub)
 
-        # Allow pausing/canceling regardless of payment (normal ops)
-        if status in {"paused", "canceled"}:
-            return self.repo.update_status(sub, status=status, auto_renew=auto_renew)
+            #  Automatically unblacklist the vehicle when reactivating
+            if vehicle and vehicle.is_blacklisted:
+                vehicle.is_blacklisted = False
+                self.db.add(vehicle)
+                self.db.commit()
+                self.db.refresh(vehicle)
 
-        # Don’t let external callers push it back to pending_payment
+            return sub
+
+        #  When suspending, pausing, or canceling — blacklist the vehicle
+        if status in {"paused", "canceled", "suspended"}:
+            sub = self.repo.update_status(sub, status=status, auto_renew=auto_renew)
+
+            if vehicle and not vehicle.is_blacklisted:
+                vehicle.is_blacklisted = True
+                self.db.add(vehicle)
+                self.db.commit()
+                self.db.refresh(vehicle)
+
+            return sub
+
+
         if status == "pending_payment":
             raise HTTPException(status_code=400, detail="Status transition not allowed")
 

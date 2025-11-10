@@ -37,3 +37,23 @@ class VehicleRepository:
             .order_by(Vehicle.id.desc())
             .all()
         )
+    def set_blacklist(self, vehicle_id: int, blacklisted: bool) -> Vehicle | None:
+        v = self.db.get(Vehicle, vehicle_id)
+        if not v:
+            return None
+        v.is_blacklisted = blacklisted
+        self.db.commit()
+        self.db.refresh(v)
+        return v
+
+    def delete_if_blacklisted(self, vehicle_id: int) -> bool:
+        """Delete the vehicle only if it is blacklisted. Return True if deleted."""
+        v = self.get_by_id(vehicle_id)
+        if not v:
+            return False
+        if not v.is_blacklisted:
+            return False
+
+        self.db.delete(v)
+        self.db.commit()
+        return True
