@@ -45,3 +45,26 @@ def send_verification_email(to: str, verify_url: str) -> bool:
 
     return True
 
+
+def send_payment_link_email(to: str, checkout_url: str) -> bool:
+    if not settings.EMAIL_ENABLED:
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = "Complete your subscription payment – Petroff Parking"
+    msg["From"] = settings.EMAIL_FROM
+    msg["To"] = to
+    msg.set_content(
+        f"Hello,\n\n"
+        f"Please complete your subscription payment here:\n{checkout_url}\n\n"
+        f"After payment, your access will be reactivated automatically.\n"
+    )
+
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as s:
+        s.starttls(context=ctx)
+        if settings.SMTP_USERNAME:
+            s.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+        s.send_message(msg)
+
+    return True

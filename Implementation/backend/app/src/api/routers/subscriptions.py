@@ -1,24 +1,30 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timezone, timedelta
 import stripe
 
 from ..deps import get_db, get_subscription_service
+from ...repositories.subscription_sqlalchemy import SubscriptionRepository
 from ...services.subscriptions import SubscriptionService
 from ...schemas.subscription import (
     SubscriptionCreate, SubscriptionRead, SubscriptionStatusUpdate, SubscriptionActivateOnPayment
 )
 from ...core.settings import settings
 from ...core.security import create_plate_claim_token, decode_plate_claim_token
-from ...services.emailer import send_verification_email
+from ...services.emailer import send_verification_email, send_payment_link_email
 from ...models.driver import Driver
 from ...models.vehicle import Vehicle
 from ...models.plan import Plan, PlanType, BillingPeriod
 from ...models.subscription import Subscription
 from ...repositories.driver_sqlalchemy import DriverRepository
 from ...repositories.vehicle_sqlalchemy import VehicleRepository
+
+class ReviveBody(BaseModel):
+    driver_email: EmailStr
+    plan_id: Optional[int] = None  # optional; if omitted we reuse the last canceled sub.plan_id
+
 
 # ---------- Stripe Helpers ----------
 def _stripe_key() -> str:
@@ -232,3 +238,66 @@ def create_subscription_checkout(subscription_id: int, db=Depends(get_db)):
 
     url = _create_subscription_checkout(db, sub)
     return {"checkout_url": url}
+
+@router.post("/vehicles/{vehicle_id}/revive-last-canceled")
+def revive_last_canceled_and_send_link(
+    vehicle_id: int,
+    payload: ReviveBody = Body(...),
+    db=Depends(get_db),
+    svc: SubscriptionService = Depends(get_subscription_service),
+):
+    # vehicle + driver
+    v = db.get(Vehicle, vehicle_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    d = db.get(Driver, v.driver_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Driver not found")
+
+    # find the most recent canceled subscription for this vehicle
+    last_canceled = (
+        db.query(Subscription)
+        .filter(Subscription.vehicle_id == vehicle_id, Subscription.status == "canceled")
+        .order_by(Subscription.id.desc())
+        .first()
+    )
+    if not last_canceled:
+        raise HTTPException(status_code=404, detail="No canceled subscription found for this vehicle")
+
+    # pick plan: explicit, or reuse the canceled one
+    plan_id = int(payload.plan_id) if payload.plan_id else last_canceled.plan_id
+    plan = db.get(Plan, plan_id)
+    if not plan or plan.type != PlanType.subscription:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+
+    now = datetime.now(timezone.utc)
+    valid_to = _compute_valid_to(now, plan)
+
+    # revive the same subscription id
+    srepo = SubscriptionRepository(db)
+    revived = srepo.revive_canceled_to_pending(
+        last_canceled.id,
+        valid_from=now,
+        valid_to=valid_to,
+        auto_renew=True,
+    )
+    if not revived:
+        raise HTTPException(status_code=409, detail="Only canceled subscriptions can be revived")
+
+    # create Stripe checkout & email it to the driver (admin not paying)
+    checkout_url = _create_subscription_checkout(db, revived)
+    try:
+        send_payment_link_email(str(payload.driver_email), checkout_url)
+    except Exception:
+        # do not fail the endpoint if email sending throws; the admin can copy the link if needed
+        pass
+
+    # do NOT un-blacklist here — the webhook will do that once payment succeeds
+    return {
+        "subscription_id": revived.id,
+        "status": revived.status,
+        "valid_from": revived.valid_from,
+        "valid_to": revived.valid_to,
+        "emailed": True,
+    }
+

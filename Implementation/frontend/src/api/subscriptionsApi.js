@@ -1,4 +1,3 @@
-// src/api/subscriptionsApi.js
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 async function jfetch(path, opts = {}) {
@@ -32,6 +31,21 @@ export function listSubscriptionPlans() {
 
 // create subscription (admin-side)
 export function createSubscription(payload) {
-  // payload: { vehicle_id, plan_id, valid_from, valid_to, auto_renew }
+
   return jfetch(`/subscriptions`, { method: "POST", body: payload });
 }
+
+
+export function createSubscriptionCheckout(subscriptionId) {
+  return jfetch(`/subscriptions/${subscriptionId}/checkout`, { method: "POST" });
+}
+
+// revive last canceled sub for a vehicle (same sub id) and email checkout link to driver
+export function reviveLastCanceledAndSendLink(vehicleId, body) {
+
+  return jfetch(`/subscriptions/vehicles/${vehicleId}/revive-last-canceled`, {
+    method: "POST",
+    body,
+  });
+}
+

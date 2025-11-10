@@ -53,22 +53,21 @@ class AccessListService:
         )
         return v
 
-    def delete_blacklisted(
-        self, *, admin_id: int, vehicle_id: int, reason: str | None = None
-    ) -> None:
+    def delete_blacklisted(self, *, admin_id: int, vehicle_id: int, reason: str | None = None) -> None:
         v = self.vehicles.get_by_id(vehicle_id)
         if not v:
             raise ValueError("vehicle_not_found")
         if not v.is_blacklisted:
             raise ValueError("vehicle_not_blacklisted")
 
-        ok = self.vehicles.delete_if_blacklisted(vehicle_id)
-        if not ok:
-            raise ValueError("delete_failed")
-
+        #  audit first, while vehicle still exists
         self._audit(
             admin_id=admin_id,
             vehicle_id=vehicle_id,
             action="vehicle.delete_blacklisted",
             reason=reason,
         )
+
+        ok = self.vehicles.delete_if_blacklisted(vehicle_id)
+        if not ok:
+            raise ValueError("delete_failed")

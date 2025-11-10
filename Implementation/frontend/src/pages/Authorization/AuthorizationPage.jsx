@@ -1,3 +1,4 @@
+// src/pages/Authorization/AuthorizationPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import "./Authorization.css";
 import StatusBadge from "../../components/StatusBadge";
@@ -24,7 +25,7 @@ export default function AuthorizationPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Modal state lives here
+  // Modal state
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
 
@@ -55,14 +56,22 @@ export default function AuthorizationPage() {
 
   }, [filter]);
 
+  // Helpers to interpret status
+  const isAuthorized = (r) => {
+    const s = (r.status || "").toLowerCase();
+    return !r.is_blacklisted && (s.includes("authorized") || s.includes("active"));
+  };
+  const isPending = (r) => (r.status || "").toLowerCase().includes("pending");
+
   const counts = useMemo(() => {
-    const c = { pending: 0, white: 0, black: 0 };
+    let pending = 0, white = 0, black = 0;
     for (const r of rows) {
-      if (r.is_blacklisted) c.black++;
-      else c.white++;
-      if ((r.status || "").toLowerCase().includes("pending")) c.pending++;
+      if (r.is_blacklisted) black++;
+      if (isPending(r)) pending++;
+      if (isAuthorized(r)) white++;
     }
-    return c;
+    return { pending, white, black };
+
   }, [rows]);
 
   function startWhitelistFlow(vehicle) {
@@ -139,38 +148,40 @@ export default function AuthorizationPage() {
             .filter((r) => {
               const txt = `${r.region_code} ${r.plate_text}`.toLowerCase();
               const matchQ = !q || txt.includes(q.toLowerCase());
-              const statusTxt = (r.status || "").toLowerCase();
               const matchF =
                 filter === "all"
                   ? true
                   : filter === "blacklisted"
                   ? r.is_blacklisted
                   : filter === "whitelisted"
-                  ? !r.is_blacklisted
+                  ? isAuthorized(r)
                   : filter === "pending"
-                  ? statusTxt.includes("pending")
+                  ? isPending(r)
                   : true;
               return matchQ && matchF;
             })
-            .map((row) => (
-              <div className="auth-trow" key={row.id}>
-                <div className="lp">
-                  {row.region_code} {row.plate_text}
+            .map((row) => {
+              const statusValue = row.is_blacklisted
+                ? "suspended"
+                : (row.status || "authorized");
+              return (
+                <div className="auth-trow" key={row.id}>
+                  <div className="lp">
+                    {row.region_code} {row.plate_text}
+                  </div>
+                  <div>
+                    <StatusBadge value={statusValue} />
+                  </div>
+                  <div className="ta-right">
+                    <ActionMenu
+                      vehicle={row}
+                      onChange={load}
+                      onStartWhitelist={startWhitelistFlow}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <StatusBadge
-                    value={row.is_blacklisted ? "suspended" : (row.status || "authorized")}
-                  />
-                </div>
-                <div className="ta-right">
-                  <ActionMenu
-                    vehicle={row}
-                    onChange={load}
-                    onStartWhitelist={startWhitelistFlow}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
           {!loading && rows.length === 0 && (
             <div className="auth-empty">No vehicles found.</div>

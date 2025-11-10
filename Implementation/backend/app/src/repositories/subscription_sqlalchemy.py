@@ -177,3 +177,23 @@ class SubscriptionRepository:
             )
         )
         return bool(self.db.query(q.exists()).scalar())
+
+    def revive_canceled_to_pending(
+            self,
+            sub_id: int,
+            *,
+            valid_from: datetime,
+            valid_to: datetime,
+            auto_renew: bool = True,
+    ):
+        sub = self.get(sub_id)
+        if not sub or sub.status != "canceled":
+            return None
+        sub.status = "pending_payment"
+        sub.auto_renew = auto_renew
+        sub.valid_from = valid_from
+        sub.valid_to = valid_to
+        sub.stripe_subscription_id = None
+        self.db.commit()
+        self.db.refresh(sub)
+        return sub

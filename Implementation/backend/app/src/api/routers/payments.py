@@ -4,6 +4,7 @@ import stripe
 
 from ..deps import get_payment_service, get_db
 from ...core.settings import settings
+from ...models import Vehicle
 from ...repositories.payment_sqlalchemy import PaymentRepository
 from ...repositories.session_sqlalchemy import ParkingSessionRepository
 from ...services.payments import PaymentService
@@ -205,7 +206,11 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
             ).first()
             if sub and sub.status != "active":
                 sub.status = "active"
-                db.commit();
+                #  ensure vehicle is whitelisted when payment lands
+                veh = db.get(Vehicle, sub.vehicle_id)
+                if veh and veh.is_blacklisted:
+                    veh.is_blacklisted = False
+                db.commit()
                 db.refresh(sub)
 
         return {"ok": True}

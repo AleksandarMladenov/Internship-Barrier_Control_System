@@ -1,17 +1,21 @@
+// src/pages/Authorization/components/SelectPlanModal.jsx
 import { useEffect, useMemo, useState } from "react";
-import { listSubscriptionPlans, createSubscription } from "../../../api/subscriptionsApi";
+import {
+  listSubscriptionPlans,
+  createSubscription,
+  createSubscriptionCheckout,
+  reviveLastCanceledAndSendLink,
+} from "../../../api/subscriptionsApi";
 
 export default function SelectPlanModal({ vehicle, open = true, onClose, onCreated }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [planId, setPlanId] = useState("");
-  const [duration, setDuration] = useState("month"); // week | month | quarter | year | custom
-  const [customDays, setCustomDays] = useState(30);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [driverEmail, setDriverEmail] = useState("");
 
   useEffect(() => {
-    // load plans whenever the modal is opened
     if (!open) return;
     let ignore = false;
     (async () => {
@@ -32,36 +36,63 @@ export default function SelectPlanModal({ vehicle, open = true, onClose, onCreat
     return () => { ignore = true; };
   }, [open]);
 
+  const selectedPlan = useMemo(
+    () => plans.find((p) => String(p.id) === String(planId)),
+    [plans, planId]
+  );
+
   const nowISO = useMemo(() => new Date().toISOString(), []);
+
+  // Compute end date from the plan's billing_period
   const endISO = useMemo(() => {
-    const start = new Date();
-    const d = new Date(start);
-    switch (duration) {
-      case "week":    d.setDate(d.getDate() + 7); break;
-      case "month":   d.setMonth(d.getMonth() + 1); break;
-      case "quarter": d.setMonth(d.getMonth() + 3); break;
-      case "year":    d.setFullYear(d.getFullYear() + 1); break;
-      case "custom":  d.setDate(d.getDate() + Math.max(1, Number(customDays) || 30)); break;
-      default:        d.setMonth(d.getMonth() + 1);
+    if (!selectedPlan) return "";
+    const d = new Date();
+
+    const period = String(selectedPlan.billing_period || "").toLowerCase();
+
+    switch (period) {
+      case "week":
+        d.setDate(d.getDate() + 7);
+        break;
+      case "quarter":
+        d.setMonth(d.getMonth() + 3);
+        break;
+      case "year":
+        d.setFullYear(d.getFullYear() + 1);
+        break;
+      // default to month if absent/unknown
+      case "month":
+      default:
+        d.setMonth(d.getMonth() + 1);
+        break;
     }
     return d.toISOString();
-  }, [duration, customDays]);
+  }, [selectedPlan]);
 
-  async function handleCreate() {
-    if (!planId) {
+  // Admin creates subscription now and opens Stripe Checkout
+  async function handleCreateNow() {
+    if (!selectedPlan) {
       setErr("Please pick a plan.");
       return;
     }
     setBusy(true);
     setErr("");
     try {
-      await createSubscription({
+      const sub = await createSubscription({
         vehicle_id: vehicle.id,
-        plan_id: Number(planId),
+        plan_id: Number(selectedPlan.id),
         valid_from: nowISO,
         valid_to: endISO,
         auto_renew: true,
       });
+
+      if (!sub?.id) throw new Error("Subscription ID missing");
+      const { checkout_url } = await createSubscriptionCheckout(sub.id);
+      if (!checkout_url) throw new Error("Checkout URL missing");
+
+      // Admin pays in a new tab/window
+      window.open(checkout_url, "_blank", "noopener,noreferrer");
+
       onCreated?.();
       onClose?.();
     } catch (e) {
@@ -71,13 +102,39 @@ export default function SelectPlanModal({ vehicle, open = true, onClose, onCreat
     }
   }
 
-  // NOTE: no early return on `!open` — parent controls mounting
+  // Email the driver a payment link; backend revives last canceled sub (same ID) or prepares pending
+  async function handleEmailDriverLink() {
+    if (!driverEmail) {
+      setErr("Please enter the driver's email.");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      await reviveLastCanceledAndSendLink(vehicle.id, {
+        driver_email: driverEmail,
+        // if you want to force the selected plan, pass it; otherwise backend can reuse the last canceled plan
+        plan_id: selectedPlan ? Number(selectedPlan.id) : undefined,
+      });
+
+      onCreated?.();
+      onClose?.();
+    } catch (e) {
+      setErr(e?.message || "Failed to send payment link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) return null;
 
   return (
     <div className="modal-backdrop">
       <div className="modal">
         <h3>Link Subscription</h3>
-        <p>Vehicle: <b>{vehicle.region_code} {vehicle.plate_text}</b></p>
+        <p>
+          Vehicle: <b>{vehicle.region_code} {vehicle.plate_text}</b>
+        </p>
 
         {loading ? (
           <p>Loading plans…</p>
@@ -88,52 +145,53 @@ export default function SelectPlanModal({ vehicle, open = true, onClose, onCreat
         ) : (
           <>
             <label className="form-row">
-              <span>Plan</span>
-              <select value={planId} onChange={e => setPlanId(e.target.value)}>
+              <span>Plan (includes period)</span>
+              <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
                 <option value="" disabled>Pick a plan…</option>
-                {plans.map(p => (
+                {plans.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} · {p.currency} {(p.price_flat_cents ?? p.price_per_minute_cents ?? 0) / 100}
+                    {p.name}
+                    {" · "}
+                    {p.currency} {(p.price_flat_cents ?? p.price_per_minute_cents ?? 0) / 100}
+                    {" · "}
+                    {String(p.billing_period || "").toLowerCase() || "month"}
                   </option>
                 ))}
               </select>
             </label>
 
-            <label className="form-row">
-              <span>Validity</span>
-              <select value={duration} onChange={e => setDuration(e.target.value)}>
-                <option value="week">1 week</option>
-                <option value="month">1 month</option>
-                <option value="quarter">3 months</option>
-                <option value="year">1 year</option>
-                <option value="custom">Custom days…</option>
-              </select>
-            </label>
-
-            {duration === "custom" && (
-              <label className="form-row">
-                <span>Days</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={customDays}
-                  onChange={(e) => setCustomDays(e.target.value)}
-                />
-              </label>
-            )}
-
             <div className="form-row compact">
               <small>Starts: {nowISO}</small>
-              <small>Ends: {endISO}</small>
+              <small>Ends: {endISO || "—"}</small>
             </div>
+
+            <label className="form-row">
+              <span>Driver email</span>
+              <input
+                type="email"
+                placeholder="driver@email.com"
+                value={driverEmail}
+                onChange={(e) => setDriverEmail(e.target.value)}
+              />
+            </label>
 
             <div className="actions">
               <button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
+
+              <button
+                className="btn"
+                onClick={handleEmailDriverLink}
+                disabled={busy || !driverEmail}
+                title={!driverEmail ? "Enter driver email" : ""}
+              >
+                {busy ? "Sending…" : "Email driver payment link"}
+              </button>
+
               <button
                 className="btn primary"
-                onClick={handleCreate}
-                disabled={busy || !planId}
-                title={!planId ? "Pick a plan first" : ""}
+                onClick={handleCreateNow}
+                disabled={busy || !selectedPlan}
+                title={!selectedPlan ? "Pick a plan first" : ""}
               >
                 {busy ? "Creating…" : "Create subscription"}
               </button>
