@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 
@@ -133,3 +133,47 @@ class SubscriptionRepository:
         self.db.delete(v)
         self.db.commit()
         return True
+
+    def cancel_all_active_for_vehicle(self, vehicle_id: int) -> int:
+        """
+        Hard-stop any currently active subscription rows:
+        - set valid_to = now (UTC)
+        - set auto_renew = False
+        - set status = 'canceled'
+        """
+        now = datetime.now(timezone.utc)
+        q = (
+            self.db.query(Subscription)
+            .filter(
+                Subscription.vehicle_id == vehicle_id,
+                Subscription.status.in_(["active", "suspended"]),  # be defensive
+                Subscription.valid_from <= now,
+                Subscription.valid_to > now,
+            )
+        )
+        updated = q.update(
+            {
+                Subscription.valid_to: now,
+                Subscription.auto_renew: False,
+                Subscription.status: "canceled",
+            },
+            synchronize_session=False,
+        )
+        self.db.commit()
+        return int(updated)
+
+    def has_active_now(self, vehicle_id: int) -> bool:
+        """
+        True if the vehicle currently has an active subscription (now falls in window).
+        """
+        now = datetime.now(timezone.utc)
+        q = (
+            self.db.query(Subscription)
+            .filter(
+                Subscription.vehicle_id == vehicle_id,
+                Subscription.status == "active",
+                Subscription.valid_from <= now,
+                Subscription.valid_to > now,
+            )
+        )
+        return bool(self.db.query(q.exists()).scalar())

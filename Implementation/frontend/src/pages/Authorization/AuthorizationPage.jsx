@@ -52,7 +52,7 @@ export default function AuthorizationPage() {
 
   useEffect(() => {
     load();
-   
+
   }, [filter]);
 
   const counts = useMemo(() => {

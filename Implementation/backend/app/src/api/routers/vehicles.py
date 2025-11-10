@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ...core.security import get_current_admin
 from ...db.database import get_db
 from ...models import Vehicle
+from ...repositories.subscription_sqlalchemy import SubscriptionRepository
 from ...services.vehicles import VehicleService
 from ...schemas.vehicle import VehicleCreate, VehicleRead
 from ..deps import get_vehicle_service
@@ -34,14 +35,17 @@ def get_vehicle(
         raise HTTPException(status_code=404, detail="Vehicle not found")
     return v
 
-@router.get("")   # NOTE: no response_model so we can return {items,total}
+@router.get("")  # NOTE: no response_model so we can return {items,total}
 def list_vehicles(
     q: str = Query("", min_length=0),
-    # previously required — now OPTIONAL
+    # now OPTIONAL
     driver_id: int | None = Query(None, description="Filter by driver if provided"),
     # UI filters
     is_blacklisted: bool | None = Query(None),
-    status: str | None = Query(None, description="Only used if Vehicle has a status column"),
+    status: str | None = Query(
+        None,
+        description="Derived access status: pending | authorized | suspended",
+    ),
     # pagination
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -64,22 +68,36 @@ def list_vehicles(
     if is_blacklisted is not None:
         query = query.filter(Vehicle.is_blacklisted == is_blacklisted)
 
-    if status:
-        try:
-            getattr(Vehicle, "status")
-            query = query.filter(func.lower(Vehicle.status).like(f"%{status.lower()}%"))
-        except AttributeError:
-            pass
-
     total = query.count()
-    items = (
+    rows = (
         query.order_by(Vehicle.id.desc())
              .offset((page - 1) * page_size)
              .limit(page_size)
              .all()
     )
 
-    return {
-        "items": items,
-        "total": total,
-    }
+    # 👇 derive access_status for each row
+    srepo = SubscriptionRepository(db)
+    def derive_access_status(v: Vehicle) -> str:
+        if v.is_blacklisted:
+            return "suspended"
+        return "authorized" if srepo.has_active_now(v.id) else "pending"
+
+    items = [
+        {
+            "id": v.id,
+            "driver_id": v.driver_id,
+            "region_code": v.region_code,
+            "plate_text": v.plate_text,
+            "is_blacklisted": v.is_blacklisted,
+            "access_status": derive_access_status(v),
+        }
+        for v in rows
+    ]
+
+    # optional filter by derived status
+    if status:
+        s = status.lower().strip()
+        items = [i for i in items if i["access_status"] == s]
+
+    return {"items": items, "total": total}
