@@ -110,7 +110,22 @@ class GateService:
 
         s = self.sessions.get_active_for_vehicle(vehicle.id)
         if not s:
-            # Graceful invalid order: exit before entry
+            # Idempotency for visitors: if a recent exit already priced this session,
+            # return the same quote instead of failing.
+            awaiting = self.sessions.get_latest_awaiting_payment_for_vehicle(vehicle.id)
+            if awaiting:
+                return {
+                    "session_id": awaiting.id,
+                    "status": "awaiting_payment",
+                    "barrier_action": "hold",
+                    "detail": "visitor_exit_payment_required",
+                    "amount_cents": awaiting.amount_charged,
+                    "currency": awaiting.plan.currency if getattr(awaiting, "plan", None) else None,
+                    "minutes_billable": awaiting.duration,
+                    "plan_id": awaiting.plan_id,
+                }
+
+            # nothing open or awaiting -> still invalid order
             return {
                 "session_id": None,
                 "status": "error",

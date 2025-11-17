@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy.orm import relationship
 from sqlalchemy.types import Numeric
 import enum
 from .base import Base
@@ -23,3 +24,5 @@ class Plan(Base):
     method = Column(String(32), nullable=True) # e.g., "card" (optional)
 
     stripe_price_id = Column(String(64), nullable=True, index=True)
+
+    sessions = relationship("Session", back_populates="plan")

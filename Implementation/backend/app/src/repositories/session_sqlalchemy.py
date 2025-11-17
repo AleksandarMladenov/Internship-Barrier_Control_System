@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from ..models.session import Session as SessionModel
 from datetime import datetime
@@ -16,7 +16,15 @@ class ParkingSessionRepository:
         return s
 
     def get(self, session_id: int) -> Optional[SessionModel]:
-        return self.db.get(SessionModel, session_id)
+        return (
+            self.db.query(SessionModel)
+            .options(
+                joinedload(SessionModel.vehicle),
+                joinedload(SessionModel.plan),
+            )
+            .filter(SessionModel.id == session_id)
+            .first()
+        )
 
     def list_by_vehicle(self, vehicle_id: int) -> List[SessionModel]:
         return (
@@ -55,3 +63,17 @@ class ParkingSessionRepository:
                 .order_by(SessionModel.id.desc())
                 .first()
     )
+
+    def get_latest_awaiting_payment_for_vehicle(self, vehicle_id: int) -> Optional[SessionModel]:
+        return (
+            self.db.query(SessionModel)
+            .filter(
+                SessionModel.vehicle_id == vehicle_id,
+                SessionModel.status == "awaiting_payment",
+                SessionModel.amount_charged.isnot(None),
+                SessionModel.ended_at.isnot(None),  # already priced/ended at exit
+            )
+            .order_by(SessionModel.id.desc())
+            .first()
+        )
+

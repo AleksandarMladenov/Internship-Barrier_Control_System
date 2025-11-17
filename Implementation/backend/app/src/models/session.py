@@ -10,7 +10,7 @@ class Session(Base):
     vehicle_id = Column(Integer, ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False)
     started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ended_at = Column(DateTime(timezone=True), nullable=True)  # active until set
-    # You can compute duration on the fly; no need to store seconds unless you want a snapshot
+    # It can be computed on the fly the duration
 
     plan_id = Column(Integer, ForeignKey("plans.id", ondelete="RESTRICT"), nullable=True)
     status = Column(String(24), nullable=True)  # "open" | "awaiting_payment" | "closed"
@@ -19,3 +19,5 @@ class Session(Base):
 
     vehicle = relationship("Vehicle", back_populates="sessions")
     payments = relationship("Payment", back_populates="session", cascade="all, delete-orphan")
+
+    plan = relationship("Plan", back_populates="sessions", lazy="joined")

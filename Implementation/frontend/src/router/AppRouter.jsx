@@ -6,6 +6,8 @@ import RoleManagementPage from "../pages/RoleManagement/RoleManagementPage";
 import ProtectedRoute from "./ProtectedRoute";
 import SubscriptionPage from "../pages/Subscribe/SubscriptionPage";
 import AuthorizationPage from "../pages/Authorization/AuthorizationPage";
+import VisitorPortal from "../pages/VisitorPortal/VisitorPortal";
+import ReceiptPage from "../pages/VisitorPortal/ReceiptPage";
 
 
 export default function AppRouter() {
@@ -15,6 +17,8 @@ export default function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/accept-invite" element={<AcceptInvitePage />} />
         <Route path="/subscribe" element={<SubscriptionPage />} />
+         <Route path="/visitor" element={<VisitorPortal />} />
+         <Route path="/receipt" element={<ReceiptPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route path="/admins" element={<RoleManagementPage />} />

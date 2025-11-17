@@ -32,7 +32,8 @@ def create_payment(
 ):
     return svc.create(payload)
 
-@router.get("/{payment_id}", response_model=PaymentRead)
+#change
+@router.get("/id/{payment_id}", response_model=PaymentRead)
 def get_payment(
     payment_id: int,
     svc: PaymentService = Depends(get_payment_service),
@@ -63,10 +64,19 @@ def delete_payment(
 ):
     svc.delete(payment_id)
 
+#change
 @router.post("/checkout")
-def create_checkout(session_id: int, svc: PaymentService = Depends(get_payment_service)):
+def create_checkout(
+    session_id: int,
+    svc: PaymentService = Depends(get_payment_service),
+    db = Depends(get_db),
+):
     """
-    Returns: {"payment_id": ..., "checkout_url": "..."}
+    Returns: {"payment_id": <int>, "checkout_url": <str>}
+    Preconditions:
+      - Session exists
+      - Session.status == "awaiting_payment"
+      - Session.amount_charged > 0 (will be clamped to Stripe minimums per currency)
     """
     # ---- 1) Stripe key guard ----
     stripe.api_key = settings.STRIPE_SECRET.get_secret_value() if settings.STRIPE_SECRET else ""
@@ -78,33 +88,27 @@ def create_checkout(session_id: int, svc: PaymentService = Depends(get_payment_s
     pending = next((p for p in payments if p.status == "pending"), None)
 
     if pending is None:
-
-        from ...db.database import SessionLocal
+        # Use the injected DB session
         from ...models.session import Session as SessionModel
         from ...models.plan import Plan
 
-        db = SessionLocal()
-        try:
-            s = db.get(SessionModel, session_id)
-            if not s:
-                raise HTTPException(status_code=404, detail="Session not found")
-            if s.amount_charged is None or s.amount_charged <= 0 or getattr(s, "status", "") != "awaiting_payment":
-                raise HTTPException(status_code=400, detail="Session does not require payment")
+        s = db.get(SessionModel, session_id)
+        if not s:
+            raise HTTPException(status_code=404, detail="Session not found")
 
+        if s.amount_charged is None or s.amount_charged <= 0 or (getattr(s, "status", "") != "awaiting_payment"):
+            raise HTTPException(status_code=400, detail="Session does not require payment")
 
-            currency = "EUR"
-            if getattr(s, "plan_id", None):
-                plan = db.get(Plan, s.plan_id)
-                if plan and plan.currency:
-                    currency = plan.currency.upper()
+        currency = "EUR"
+        if getattr(s, "plan_id", None):
+            plan = db.get(Plan, s.plan_id)
+            if plan and plan.currency:
+                currency = plan.currency.upper()
 
-            amount_cents = int(s.amount_charged)
-
-            min_amt = min_amount_for(currency)
-            if amount_cents < min_amt:
-                amount_cents = min_amt
-        finally:
-            db.close()
+        amount_cents = int(s.amount_charged)
+        min_amt = min_amount_for(currency)
+        if amount_cents < min_amt:
+            amount_cents = min_amt
 
         payload = PaymentCreate(
             session_id=session_id,
@@ -117,7 +121,7 @@ def create_checkout(session_id: int, svc: PaymentService = Depends(get_payment_s
     else:
         payment = pending
 
-    # ---- 4) Create Stripe Checkout ----
+    # ---- 3) Create Stripe Checkout ----
     try:
         sess = stripe.checkout.Session.create(
             mode="payment",
@@ -130,17 +134,37 @@ def create_checkout(session_id: int, svc: PaymentService = Depends(get_payment_s
                 },
                 "quantity": 1,
             }],
-            success_url="http://localhost:8000/payments/success?cs={CHECKOUT_SESSION_ID}",
-            cancel_url="http://localhost:8000/payments/cancel",
+            #  add this so PI carries the references
+            payment_intent_data={
+                "metadata": {
+                    "payment_id": str(payment.id),
+                    "session_id": str(session_id),
+                    "type": "visitor_session",
+                }
+            },
+            # keep metadata on the CS too
             metadata={
                 "payment_id": str(payment.id),
                 "session_id": str(session_id),
                 "type": "visitor_session",
             },
+            success_url="http://localhost:5173/receipt?cs={CHECKOUT_SESSION_ID}",
+            cancel_url="http://localhost:5173/visitor?cancelled=true",
         )
+
+        # persist BOTH ids (uses your PaymentRepository.attach_stripe_ids)
+        repo = PaymentRepository(db)
+        repo.attach_stripe_ids(
+            repo.get(payment.id),
+            checkout_id=sess.get("id"),
+            payment_intent_id=sess.get("payment_intent"),
+        )
+
         return {"payment_id": payment.id, "checkout_url": sess.url}
-    except stripe.error.StripeError:
-        raise HTTPException(status_code=502, detail="Stripe error creating checkout session")
+
+    except stripe.error.StripeError as e:
+        msg = getattr(e, "user_message", None) or str(e)
+        raise HTTPException(status_code=502, detail=f"stripe_error: {msg}")
 
 
 @router.post("/webhook")
@@ -195,7 +219,29 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
                         sessions.db.commit()
         return {"ok": True}
 
-    # 2) First charge & renewals for subscriptions
+        # 2) PaymentIntent succeeded (fallback)
+    if event["type"] == "payment_intent.succeeded":
+        pi = event["data"]["object"]
+        pi_id = pi.get("id")
+
+        p = payments.get_by_payment_intent(pi_id) if pi_id else None
+        if not p:
+            meta = (pi.get("metadata") or {})
+            pid = int(meta.get("payment_id") or 0)
+            if pid:
+                p = payments.get(pid)
+
+        if p:
+            if p.status != "succeeded":
+                payments.set_status(p, "succeeded")
+            if p.session_id:
+                s = sessions.get(p.session_id)
+                if s:
+                    s.status = "closed" if s.ended_at else "paid"
+                    sessions.db.commit()
+        return {"ok": True}
+
+    # 3) First charge & renewals for subscriptions
     if event["type"] == "invoice.payment_succeeded":
         invoice = event["data"]["object"]
         stripe_sub_id = invoice.get("subscription")
@@ -242,3 +288,44 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
 
     # Fallback
     return {"ok": True}
+
+@router.get("/resolve")
+def resolve_checkout_session(cs: str, db=Depends(get_db)):
+    payment = PaymentRepository(db).get_by_checkout_session_id(cs)
+    if not payment or not payment.session_id:
+        raise HTTPException(status_code=404, detail="not_found")
+    return {"session_id": payment.session_id}
+
+@router.post("/confirm")
+def confirm_checkout(cs: str, db = Depends(get_db)):
+    stripe.api_key = settings.STRIPE_SECRET.get_secret_value() if settings.STRIPE_SECRET else ""
+    if not stripe.api_key:
+        raise HTTPException(status_code=500, detail="Stripe secret key not configured")
+
+    try:
+        cs_obj = stripe.checkout.Session.retrieve(cs)
+    except stripe.error.StripeError as e:
+        msg = getattr(e, "user_message", None) or str(e)
+        raise HTTPException(status_code=502, detail=f"stripe_error: {msg}")
+
+    repo = PaymentRepository(db)
+    sess_repo = ParkingSessionRepository(db)
+
+    p = repo.get_by_checkout_session_id(cs_obj.get("id"))
+    if not p and cs_obj.get("payment_intent"):
+        p = repo.get_by_payment_intent(cs_obj.get("payment_intent"))
+
+    if not p:
+        raise HTTPException(status_code=404, detail="payment_not_found")
+
+    if cs_obj.get("payment_status") == "paid" and p.status != "succeeded":
+        repo.set_status(p, "succeeded")
+        if p.session_id:
+            s = sess_repo.get(p.session_id)
+            if s:
+                s.status = "closed" if s.ended_at else "paid"
+                sess_repo.db.commit()
+
+    return {"ok": True, "session_id": p.session_id}
+
+
