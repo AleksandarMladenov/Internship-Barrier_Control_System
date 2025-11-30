@@ -10,7 +10,7 @@ from ...repositories.session_sqlalchemy import ParkingSessionRepository
 from ...services.payments import PaymentService
 from ...schemas.payment import PaymentCreate, PaymentRead, PaymentUpdateStatus, PaymentStatus
 from ...models.subscription import Subscription
-
+from ...services.gate import _barrier_pulse_open  # <--- barrier helper
 
 
 # Stripe currency minimums
@@ -25,6 +25,7 @@ def min_amount_for(currency: str) -> int:
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
+
 @router.post("", response_model=PaymentRead, status_code=201)
 def create_payment(
     payload: PaymentCreate,
@@ -32,13 +33,14 @@ def create_payment(
 ):
     return svc.create(payload)
 
-#change
+
 @router.get("/id/{payment_id}", response_model=PaymentRead)
 def get_payment(
     payment_id: int,
     svc: PaymentService = Depends(get_payment_service),
 ):
     return svc.get(payment_id)
+
 
 @router.get("", response_model=list[PaymentRead])
 def list_payments(
@@ -49,6 +51,7 @@ def list_payments(
 ):
     return svc.list(session_id=session_id, subscription_id=subscription_id, status=status)
 
+
 @router.post("/{payment_id}/status", response_model=PaymentRead)
 def set_payment_status(
     payment_id: int,
@@ -57,6 +60,7 @@ def set_payment_status(
 ):
     return svc.set_status(payment_id, payload.status)
 
+
 @router.delete("/{payment_id}", status_code=204)
 def delete_payment(
     payment_id: int,
@@ -64,7 +68,7 @@ def delete_payment(
 ):
     svc.delete(payment_id)
 
-#change
+
 @router.post("/checkout")
 def create_checkout(
     session_id: int,
@@ -134,7 +138,7 @@ def create_checkout(
                 },
                 "quantity": 1,
             }],
-            #  add this so PI carries the references
+            # add this so PI carries the references
             payment_intent_data={
                 "metadata": {
                     "payment_id": str(payment.id),
@@ -202,11 +206,11 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
                 if sub:
                     sub.stripe_subscription_id = stripe_sub_id
                     # still pending payment until first invoice succeeds
-                    db.commit();
+                    db.commit()
                     db.refresh(sub)
             return {"ok": True}
 
-        #  Visitor checkout
+        # Visitor checkout (one-off parking session)
         pid = int(data.get("metadata", {}).get("payment_id", "0") or "0")
         if pid:
             p = payments.get(pid)
@@ -217,9 +221,13 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
                     if s:
                         s.status = "closed" if s.ended_at else "paid"
                         sessions.db.commit()
+
+                        # Open barrier on successful visitor payment
+                        _barrier_pulse_open(seconds=5)
+
         return {"ok": True}
 
-        # 2) PaymentIntent succeeded (fallback)
+    # 2) PaymentIntent succeeded (fallback)
     if event["type"] == "payment_intent.succeeded":
         pi = event["data"]["object"]
         pi_id = pi.get("id")
@@ -239,6 +247,10 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
                 if s:
                     s.status = "closed" if s.ended_at else "paid"
                     sessions.db.commit()
+
+                    # Open barrier on successful PaymentIntent for session
+                    _barrier_pulse_open(seconds=5)
+
         return {"ok": True}
 
     # 3) First charge & renewals for subscriptions
@@ -252,7 +264,7 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
             ).first()
             if sub and sub.status != "active":
                 sub.status = "active"
-                #  ensure vehicle is whitelisted when payment lands
+                # ensure vehicle is whitelisted when payment lands
                 veh = db.get(Vehicle, sub.vehicle_id)
                 if veh and veh.is_blacklisted:
                     veh.is_blacklisted = False
@@ -261,7 +273,7 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
 
         return {"ok": True}
 
-    # 3) Subscription canceled
+    # 4) Subscription canceled / updated
     if event["type"] in {
         "customer.subscription.updated",
         "customer.subscription.deleted",
@@ -281,7 +293,7 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
                 sub.status = "paused"
             elif status == "canceled":
                 sub.status = "canceled"
-            db.commit();
+            db.commit()
             db.refresh(sub)
 
         return {"ok": True}
@@ -289,12 +301,14 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
     # Fallback
     return {"ok": True}
 
+
 @router.get("/resolve")
 def resolve_checkout_session(cs: str, db=Depends(get_db)):
     payment = PaymentRepository(db).get_by_checkout_session_id(cs)
     if not payment or not payment.session_id:
         raise HTTPException(status_code=404, detail="not_found")
     return {"session_id": payment.session_id}
+
 
 @router.post("/confirm")
 def confirm_checkout(cs: str, db = Depends(get_db)):
@@ -326,6 +340,7 @@ def confirm_checkout(cs: str, db = Depends(get_db)):
                 s.status = "closed" if s.ended_at else "paid"
                 sess_repo.db.commit()
 
+                # Open barrier on manual confirm success
+                _barrier_pulse_open(seconds=5)
+
     return {"ok": True, "session_id": p.session_id}
-
-

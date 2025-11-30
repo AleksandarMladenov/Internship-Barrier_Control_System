@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+import requests
 
 from .pricing import compute_amount_cents
 from ..core.settings import settings
@@ -19,6 +20,47 @@ VISITOR_DRIVER_NAME = "Visitor"
 
 IDEMPOTENCY_WINDOW = timedelta(minutes=5)
 
+
+def _barrier_pulse_open(seconds: int = 5):
+    """
+    Ask the Raspberry Pi LED server to pulse green (open) for N seconds,
+    then it will go back to red (closed).
+    If BARRIER_PI_BASE_URL is not configured, this is a no-op.
+    """
+    base = getattr(settings, "BARRIER_PI_BASE_URL", None)
+    if not base:
+        return
+
+    base = base.rstrip("/")
+    try:
+        requests.post(
+            f"{base}/led/pulse",
+            json={"seconds": seconds},
+            timeout=0.5,
+        )
+    except Exception as e:
+        print(f"[BARRIER] Failed to pulse open: {e}")
+
+
+def _barrier_force_close():
+    """
+    Force the barrier into CLOSED state (red on).
+    If BARRIER_PI_BASE_URL is not configured, this is a no-op.
+    """
+    base = getattr(settings, "BARRIER_PI_BASE_URL", None)
+    if not base:
+        return
+
+    base = base.rstrip("/")
+    try:
+        requests.post(
+            f"{base}/led/close",
+            timeout=0.5,
+        )
+    except Exception as e:
+        print(f"[BARRIER] Failed to force close: {e}")
+
+
 class GateService:
     def __init__(self, db: Session):
         self.db = db
@@ -29,12 +71,19 @@ class GateService:
         self.plans = PlanRepository(db)
 
     def _ensure_visitor_driver(self):
-        d = self.drivers.get_by_email(VISITOR_DRIVER_EMAIL)
+        d = self.drivers.get_by_email(VISITOR_MODE_ENABLED and VISITOR_DRIVER_EMAIL)
         if d:
             return d
         return self.drivers.create(name=VISITOR_DRIVER_NAME, email=VISITOR_DRIVER_EMAIL)
 
-    def handle_entry_scan(self, *, region_code: str, plate_text: str, gate_id: str | None, source: str | None):
+    def handle_entry_scan(
+        self,
+        *,
+        region_code: str,
+        plate_text: str,
+        gate_id: str | None,
+        source: str | None,
+    ):
         now = datetime.now(timezone.utc)
         region_code = region_code.strip().upper()
         plate_text = plate_text.strip().upper()
@@ -59,12 +108,14 @@ class GateService:
         # 2) Blacklist check (you only have blacklist flag in RM – keep it simple)
         if getattr(vehicle, "is_blacklisted", False):
             # No session created, barrier stays closed
+            _barrier_force_close()
             raise HTTPException(status_code=403, detail="blacklisted")
-
 
         # 3) Idempotency: if there's any OPEN session, reuse it
         active = self.sessions.get_active_for_vehicle(vehicle.id)
         if active:
+            # Barrier should open (same as before: barrier_action="open")
+            _barrier_pulse_open(seconds=5)
             return {
                 "status": "open",
                 "reason": "existing_open_session",
@@ -79,6 +130,9 @@ class GateService:
             started_at=now,  # explicit UTC
         )
 
+        # Ask the Pi to open the barrier (green for N seconds then red)
+        _barrier_pulse_open(seconds=5)
+
         return {
             "status": "open",
             "reason": "created",
@@ -86,7 +140,15 @@ class GateService:
             "barrier_action": "open",
             "created_at_utc": new_sess.started_at,
         }
-    def handle_exit_scan(self, *, region_code: str, plate_text: str, gate_id: str | None, source: str | None):
+
+    def handle_exit_scan(
+        self,
+        *,
+        region_code: str,
+        plate_text: str,
+        gate_id: str | None,
+        source: str | None,
+    ):
         """
         Exit logic:
         - Find vehicle and its open session.
@@ -101,6 +163,7 @@ class GateService:
         vehicle = self.vehicles.get_by_plate(region_code=region_code, plate_text=plate_text)
         if not vehicle:
             # Unknown vehicle at exit: hold (no session to close)
+            _barrier_force_close()
             return {
                 "session_id": None,
                 "status": "error",
@@ -114,6 +177,7 @@ class GateService:
             # return the same quote instead of failing.
             awaiting = self.sessions.get_latest_awaiting_payment_for_vehicle(vehicle.id)
             if awaiting:
+                _barrier_force_close()
                 return {
                     "session_id": awaiting.id,
                     "status": "awaiting_payment",
@@ -126,6 +190,7 @@ class GateService:
                 }
 
             # nothing open or awaiting -> still invalid order
+            _barrier_force_close()
             return {
                 "session_id": None,
                 "status": "error",
@@ -135,6 +200,7 @@ class GateService:
 
         # Idempotency: if a race already ended it
         if s.ended_at is not None:
+            # This branch says barrier_action="open" (idempotent open)
             return {
                 "session_id": s.id,
                 "status": "closed",
@@ -146,6 +212,8 @@ class GateService:
         active_sub = self.subs.get_active_subscription_plan_for_vehicle_at(vehicle.id, now)
         if active_sub:
             s = self.sessions.end_session(s, ended_at=now)
+            # Existing behavior: barrier_action="open".
+            # We can leave actual Pi pulse to the payment/exit flow if you prefer.
             return {
                 "session_id": s.id,
                 "status": "closed",
@@ -153,10 +221,10 @@ class GateService:
                 "detail": "subscriber_exit",
             }
 
-        # Visitor branch (Stripe comes next)
         # ---------- Visitor branch ----------
         # Idempotency: if already priced & awaiting payment, re-use same quote
         if getattr(s, "status", None) == "awaiting_payment" and s.amount_charged is not None:
+            _barrier_force_close()
             return {
                 "session_id": s.id,
                 "status": "awaiting_payment",
@@ -170,6 +238,7 @@ class GateService:
 
         vplan = self.plans.get_default_visitor_plan()
         if not vplan or vplan.price_per_minute_cents is None:
+            _barrier_force_close()
             return {
                 "session_id": s.id,
                 "status": "error",
@@ -178,7 +247,8 @@ class GateService:
             }
 
         amount_cents, minutes = compute_amount_cents(
-            s.started_at, now,
+            s.started_at,
+            now,
             vplan.price_per_minute_cents,
             settings.PRICING_GRACE_MINUTES,
             settings.PRICING_ROUND_UP,
@@ -192,8 +262,9 @@ class GateService:
 
         if settings.GRACE_AUTOCLOSE_ENABLED and amount_cents == 0:
             s.status = "closed"
-            self.db.commit();
+            self.db.commit()
             self.db.refresh(s)
+            # barrier_action="open" (free exit)
             return {
                 "session_id": s.id,
                 "status": "closed",
@@ -202,9 +273,10 @@ class GateService:
             }
 
         s.status = "awaiting_payment"
-        self.db.commit();
+        self.db.commit()
         self.db.refresh(s)
 
+        _barrier_force_close()
         return {
             "session_id": s.id,
             "status": "awaiting_payment",
@@ -215,5 +287,3 @@ class GateService:
             "minutes_billable": minutes,
             "plan_id": vplan.id,
         }
-
-

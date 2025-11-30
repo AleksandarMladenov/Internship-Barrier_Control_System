@@ -1,10 +1,13 @@
 // src/pages/Authorization/AuthorizationPage.jsx
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import "./Authorization.css";
 import StatusBadge from "../../components/StatusBadge";
 import ActionMenu from "./components/ActionMenu";
 import SelectPlanModal from "./components/SelectPlanModal";
 import { fetchVehicles } from "../../api/adminApi";
+import AdminLayout from "../../layouts/AdminLayout";
 
 function Card({ icon, title, subtitle, onClick }) {
   return (
@@ -19,6 +22,8 @@ function Card({ icon, title, subtitle, onClick }) {
 }
 
 export default function AuthorizationPage() {
+  const navigate = useNavigate();
+
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all"); // all | pending | whitelisted | blacklisted
   const [rows, setRows] = useState([]);
@@ -33,7 +38,7 @@ export default function AuthorizationPage() {
     setLoading(true);
     try {
       const data = await fetchVehicles({ q, filter, page: 1, pageSize: 50 });
-      const items = Array.isArray(data) ? data : (data.items ?? []);
+      const items = Array.isArray(data) ? data : data.items ?? [];
       const normalized = items.map((v) => ({
         ...v,
         is_blacklisted: v.is_blacklisted ?? v.blacklisted ?? false,
@@ -53,25 +58,26 @@ export default function AuthorizationPage() {
 
   useEffect(() => {
     load();
-
-  }, [filter]);
+  }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Helpers to interpret status
   const isAuthorized = (r) => {
     const s = (r.status || "").toLowerCase();
     return !r.is_blacklisted && (s.includes("authorized") || s.includes("active"));
   };
+
   const isPending = (r) => (r.status || "").toLowerCase().includes("pending");
 
   const counts = useMemo(() => {
-    let pending = 0, white = 0, black = 0;
+    let pending = 0;
+    let white = 0;
+    let black = 0;
     for (const r of rows) {
       if (r.is_blacklisted) black++;
       if (isPending(r)) pending++;
       if (isAuthorized(r)) white++;
     }
     return { pending, white, black };
-
   }, [rows]);
 
   function startWhitelistFlow(vehicle) {
@@ -80,10 +86,10 @@ export default function AuthorizationPage() {
   }
 
   return (
-    <>
+    <AdminLayout title="Dashboard">
       <div className="auth-wrap">
+        {/* top row: search + round avatar */}
         <div className="auth-header">
-          <h1>Dashboard</h1>
           <div className="auth-search">
             <input
               value={q}
@@ -92,9 +98,10 @@ export default function AuthorizationPage() {
               onKeyDown={(e) => e.key === "Enter" && load()}
             />
           </div>
-          <div className="auth-avatar" />
+
         </div>
 
+        {/* metric cards */}
         <div className="auth-cards">
           <Card
             title="Pending Vehicles"
@@ -114,14 +121,10 @@ export default function AuthorizationPage() {
             icon={<span role="img" aria-label="flag">🏳️</span>}
             onClick={() => setFilter("blacklisted")}
           />
-          <Card
-            title="Role Audit"
-            subtitle="View actions"
-            icon={<span role="img" aria-label="id">🪪</span>}
-            onClick={() => alert("Route to Role Management / Audit page")}
-          />
+
         </div>
 
+        {/* filter + refresh */}
         <div className="auth-toolbar">
           <label className="filter">
             <span>Filter</span>
@@ -137,6 +140,7 @@ export default function AuthorizationPage() {
           </button>
         </div>
 
+        {/* table */}
         <div className="auth-table">
           <div className="auth-thead">
             <div>License Plate</div>
@@ -163,7 +167,7 @@ export default function AuthorizationPage() {
             .map((row) => {
               const statusValue = row.is_blacklisted
                 ? "suspended"
-                : (row.status || "authorized");
+                : row.status || "authorized";
               return (
                 <div className="auth-trow" key={row.id}>
                   <div className="lp">
@@ -187,24 +191,25 @@ export default function AuthorizationPage() {
             <div className="auth-empty">No vehicles found.</div>
           )}
         </div>
-      </div>
 
-      {showPlanModal && selectedVehicle && (
-        <SelectPlanModal
-          vehicle={selectedVehicle}
-          open={showPlanModal}
-          onClose={() => {
-            setShowPlanModal(false);
-            setSelectedVehicle(null);
-          }}
-          onCreated={() => {
-            setShowPlanModal(false);
-            setSelectedVehicle(null);
-            if (filter === "blacklisted") setFilter("whitelisted");
-            load();
-          }}
-        />
-      )}
-    </>
+        {/* plan selection modal */}
+        {showPlanModal && selectedVehicle && (
+          <SelectPlanModal
+            vehicle={selectedVehicle}
+            open={showPlanModal}
+            onClose={() => {
+              setShowPlanModal(false);
+              setSelectedVehicle(null);
+            }}
+            onCreated={() => {
+              setShowPlanModal(false);
+              setSelectedVehicle(null);
+              if (filter === "blacklisted") setFilter("whitelisted");
+              load();
+            }}
+          />
+        )}
+      </div>
+    </AdminLayout>
   );
 }

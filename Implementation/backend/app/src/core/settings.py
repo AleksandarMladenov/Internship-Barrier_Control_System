@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     STRIPE_SECRET: SecretStr = SecretStr("")
     STRIPE_WEBHOOK_SECRET: SecretStr = SecretStr("")
     PUBLIC_BASE_URL: str = "http://localhost:8000"
+    BARRIER_PI_BASE_URL: str = "http://192.168.1.160:5000"
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     FIREBASE_STORAGE_BUCKET: Optional[str] = None
 
