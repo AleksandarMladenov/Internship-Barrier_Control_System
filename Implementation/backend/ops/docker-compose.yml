@@ -55,5 +55,33 @@ services:
     depends_on:
       - api
 
+  ocr_live:
+    build:
+      context: .
+      dockerfile: Dockerfile.ocr
+    container_name: ops-ocr-live
+    environment:
+      - API_BASE=http://api:8000/api       # talk to API container
+      - REGION_CODE=BG
+      - GATE_ID=GATE-A
+      - MODE=entry                         # or "exit" for exit camera
+      - YOLO_WEIGHTS=/assets/best.pt
+      - YOLO_CONF=0.45
+      - FRAME_SKIP=1
+      - STABLE_FRAMES=3
+      - COOLDOWN_SEC=10
+      - PLATE_REGEX=ANY
+    volumes:
+      - ./ocr_assets:/assets:ro            # best.pt lives here
+    command: [
+      "python",
+      "lp_recognizer_live.py",
+      "--source", "http://192.168.1.143:4747/video",
+      "--display"
+    ]
+    depends_on:
+      - api
+
+
 volumes:
   db_data: {}

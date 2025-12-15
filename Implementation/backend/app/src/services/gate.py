@@ -200,7 +200,8 @@ class GateService:
 
         # Idempotency: if a race already ended it
         if s.ended_at is not None:
-            # This branch says barrier_action="open" (idempotent open)
+            # Already ended -> allow it out again, OPEN barrier
+            _barrier_pulse_open(seconds=5)
             return {
                 "session_id": s.id,
                 "status": "closed",
@@ -212,8 +213,8 @@ class GateService:
         active_sub = self.subs.get_active_subscription_plan_for_vehicle_at(vehicle.id, now)
         if active_sub:
             s = self.sessions.end_session(s, ended_at=now)
-            # Existing behavior: barrier_action="open".
-            # We can leave actual Pi pulse to the payment/exit flow if you prefer.
+            # Subscriber exit -> OPEN barrier
+            _barrier_pulse_open(seconds=5)
             return {
                 "session_id": s.id,
                 "status": "closed",
@@ -264,7 +265,8 @@ class GateService:
             s.status = "closed"
             self.db.commit()
             self.db.refresh(s)
-            # barrier_action="open" (free exit)
+            # FREE visitor exit -> OPEN barrier
+            _barrier_pulse_open(seconds=5)
             return {
                 "session_id": s.id,
                 "status": "closed",
