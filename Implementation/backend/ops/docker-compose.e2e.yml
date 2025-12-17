@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  e2e-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: parking
+      POSTGRES_PASSWORD: parking
+      POSTGRES_DB: parking_test
+    ports:
+      - "5433:5432"   # optional; lets you connect from host without colliding with 5432
+    volumes:
+      - db_data_e2e:/var/lib/postgresql/data
+
+  e2e-api:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile.api
+    env_file:
+      - ../app/.env
+    environment:
+      ENV: test
+      DATABASE_URL: postgresql+psycopg://parking:parking@e2e-db:5432/parking_test
+      PYTHONPATH: /app
+      BARRIER_PI_BASE_URL: ""   # no hardware calls in E2E
+    volumes:
+      - ../app:/app
+    depends_on:
+      - e2e-db
+    ports:
+      - "8001:8000"
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+volumes:
+  db_data_e2e: {}

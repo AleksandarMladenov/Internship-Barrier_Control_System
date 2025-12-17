@@ -32,6 +32,7 @@ export default function RoleManagementPage() {
       setLoading(false);
     }
   }
+
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -48,45 +49,77 @@ export default function RoleManagementPage() {
 
   return (
     <AdminLayout
-      title="Role Management"
+      title={
+        <span data-cy="role-management-title">
+          Role Management
+        </span>
+      }
       actions={
-        <div className="rm-actions">
-          <select value={filter} onChange={(e)=>setFilter(e.target.value)} className="rm-select">
+        <div className="rm-actions" data-cy="role-management-actions">
+          <select
+            value={filter}
+            onChange={(e)=>setFilter(e.target.value)}
+            className="rm-select"
+            data-cy="role-filter"
+          >
             <option value="all">All</option>
             <option value="active">Active</option>
             <option value="invited">Invited</option>
             <option value="disabled">Disabled</option>
           </select>
-            {canInvite && (
-            <button className="rm-btn primary" onClick={() => setShowInvite(true)}>
-                    +Invite
+
+          {canInvite && (
+            <button
+              className="rm-btn primary"
+              onClick={() => setShowInvite(true)}
+              data-cy="invite-admin-button"
+            >
+              +Invite
             </button>
-            )}
+          )}
         </div>
       }
     >
-      {err && <div className="rm-error">{err}</div>}
+      {err && (
+        <div className="rm-error" data-cy="role-management-error">
+          {err}
+        </div>
+      )}
+
       {loading ? (
-        <div className="rm-empty">Loading…</div>
+        <div className="rm-empty" data-cy="role-management-loading">
+          Loading…
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="rm-empty">No admins match this filter.</div>
+        <div className="rm-empty" data-cy="role-management-empty">
+          No admins match this filter.
+        </div>
       ) : (
         <div className="rm-card">
-          <table className="rm-table">
+          <table className="rm-table" data-cy="admins-table">
             <thead>
               <tr>
-                <th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th>
+                <th>#</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
                 <th style={{ width:220 }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a,i)=>(
-                <RoleRow key={a.id} index={i+1} me={user} admin={a}
+                <RoleRow
+                  key={a.id}
+                  index={i+1}
+                  me={user}
+                  admin={a}
                   canEditRoles={canEditRoles}
                   onResend={actions.onResend}
                   onActivate={actions.onActivate}
                   onDeactivate={actions.onDeactivate}
                   onChangeRole={actions.onChangeRole}
+                  dataCy={`admin-row-${a.email}`}
                 />
               ))}
             </tbody>
@@ -95,15 +128,17 @@ export default function RoleManagementPage() {
       )}
 
       {showInvite && (
-        <InviteModal
-          canInviteOwner={user?.role === "owner"}
-          onClose={()=>setShowInvite(false)}
-          onSubmit={async payload => {
-            const res = await inviteAdmin(payload);
-            await load();
-            return res;
-          }}
-        />
+        <div data-cy="invite-modal">
+          <InviteModal
+            canInviteOwner={user?.role === "owner"}
+            onClose={()=>setShowInvite(false)}
+            onSubmit={async payload => {
+              const res = await inviteAdmin(payload);
+              await load();
+              return res;
+            }}
+          />
+        </div>
       )}
     </AdminLayout>
   );
