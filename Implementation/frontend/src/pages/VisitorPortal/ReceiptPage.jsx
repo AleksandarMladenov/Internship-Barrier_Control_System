@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import "./VisitorPortal.css";
 
 const API = (import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL || "").trim();
 const EMAIL_EP = import.meta.env.VITE_RECEIPT_EMAIL_ENDPOINT || "";
@@ -15,26 +16,60 @@ const fmtTime = (iso) =>
 
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || "");
 
-// simple divider
-function Divider() {
-  return <div className="h-px bg-gray-200 my-5" />;
+function cn(...xs) {
+  return xs.filter(Boolean).join(" ");
 }
 
-// plate pill
-function PlatePill({ region, plate }) {
+function Notice({ intent = "info", children }) {
+  return <div className={cn("vp-notice", `vp-notice-${intent}`)}>{children}</div>;
+}
+
+function TopStepper({ step, onBack }) {
+  const items = ["Review", "Payment", "Receipt"];
+  const activeIndex = step === "lookup" ? 0 : step === "summary" ? 1 : 2;
+
   return (
-    <div className="inline-flex items-center px-4 h-9 rounded-xl border-2 border-teal-500 text-sm font-semibold text-gray-800">
-      {region?.toUpperCase()}
-      {plate ? plate.toUpperCase() : ""}
+    <header className="vp-stepper">
+      <button type="button" onClick={onBack} className="vp-stepper-back" aria-label="Back">
+        &lt;
+      </button>
+
+      <div className="vp-stepper-mid">
+        <div className="vp-stepper-labels">
+          {items.map((label, i) => (
+            <span
+              key={label}
+              className={cn("vp-stepper-label", i === activeIndex && "vp-stepper-label-active")}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
+        <div className="vp-stepper-dots">
+          {items.map((_, i) => (
+            <span key={i} className={cn("vp-stepper-dot", i === activeIndex && "vp-stepper-dot-active")} />
+          ))}
+        </div>
+      </div>
+
+      <div className="vp-stepper-spacer" />
+    </header>
+  );
+}
+
+function PlatePill({ value }) {
+  return (
+    <div className="vp-plate-pill">
+      <span className="vp-plate-pill-text">{value || "—"}</span>
     </div>
   );
 }
 
-
 function Barcode({ plateFull, sessionId }) {
   return (
-    <div className="w-full flex flex-col items-center">
-      <svg viewBox="0 0 420 100" className="w-[90%] max-w-sm h-24">
+    <div className="vp-barcode">
+      <svg viewBox="0 0 420 100" className="vp-barcode-svg" aria-label="Barcode">
         {[
           10, 22, 28, 44, 54, 60, 78, 90, 98, 120, 132, 150, 162, 166, 180, 196, 210, 224, 232, 248, 260, 268, 280,
           292, 305, 318, 330, 342, 350, 364, 378, 392, 404,
@@ -42,10 +77,30 @@ function Barcode({ plateFull, sessionId }) {
           <rect key={i} x={x} y={8} width={i % 3 === 0 ? 8 : 4} height={84} fill="black" />
         ))}
       </svg>
-      <div className="text-xs text-gray-500 -mt-1 tracking-widest">
+
+      <div className="vp-barcode-caption">
         {plateFull || "N/A"} &nbsp;•&nbsp; Session #{sessionId}
       </div>
     </div>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, type = "text" }) {
+  return (
+    <label className="vp-field vp-field-1">
+      <div className="vp-field-top">
+        <span className="vp-field-label">{label}</span>
+      </div>
+      <input className="vp-input" type={type} value={value} onChange={onChange} placeholder={placeholder} />
+    </label>
+  );
+}
+
+function PrimaryButton({ children, disabled, onClick }) {
+  return (
+    <button onClick={onClick} disabled={disabled} className={cn("vp-btn vp-btn-primary", disabled && "vp-btn-disabled")}>
+      {children}
+    </button>
   );
 }
 
@@ -68,20 +123,16 @@ export default function ReceiptPage() {
 
         // Resolve by checkout session id if needed
         if (!sid && cs) {
-          const r = await fetch(
-            `${API}/payments/resolve?cs=${encodeURIComponent(cs)}&t=${Date.now()}`,
-            {
-              cache: "no-store",
-              headers: { "Cache-Control": "no-cache" },
-            },
-          );
+          const r = await fetch(`${API}/payments/resolve?cs=${encodeURIComponent(cs)}&t=${Date.now()}`, {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" },
+          });
           if (r.ok) {
             const j = await r.json();
             sid = String(j.session_id);
             sessionStorage.setItem("visitor.session_id", sid);
           }
         }
-
 
         if (!sid) {
           const stored = sessionStorage.getItem("visitor.session_id");
@@ -99,11 +150,10 @@ export default function ReceiptPage() {
             headers: { "Cache-Control": "no-cache" },
           }).then((r) => r.json());
 
-
         let s = await getSession();
         setSession(s);
 
-
+        // If returning from Stripe: confirm + re-fetch
         if (cs && s?.status === "awaiting_payment") {
           try {
             await fetch(`${API}/payments/confirm?cs=${encodeURIComponent(cs)}`, {
@@ -114,11 +164,11 @@ export default function ReceiptPage() {
             s = await getSession();
             setSession(s);
           } catch {
-
+            // ignore
           }
         }
 
-
+        // Poll briefly if still awaiting
         if (s?.status === "awaiting_payment") {
           for (let i = 0; i < 6; i++) {
             await new Promise((r) => setTimeout(r, 2000));
@@ -130,7 +180,7 @@ export default function ReceiptPage() {
           }
         }
 
-
+        // Clean URL
         if (window.history?.replaceState) {
           const url = new URL(window.location.href);
           if (cs) url.searchParams.delete("cs");
@@ -156,11 +206,7 @@ export default function ReceiptPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: session.id, email }),
       });
-      if (resp.ok) {
-        setToast("Receipt sent to your email.");
-      } else {
-        setToast("Could not send email. Please try again.");
-      }
+      setToast(resp.ok ? "Receipt sent to your email." : "Could not send email. Please try again.");
     } catch {
       setToast("Could not send email. Please try again.");
     } finally {
@@ -178,93 +224,88 @@ export default function ReceiptPage() {
   const addressCity = "Vratsa, 3000";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-md border border-gray-100 p-5">
-        {/* Header */}
-        <div className="mb-4">
-          <div className="text-sm font-semibold text-gray-900">Receipt</div>
-          <div className="text-xs text-gray-600">Thank you for parking with us</div>
-        </div>
+    <div className="vp-screen">
+      <div className="vp-phone">
+        <TopStepper step="receipt" onBack={() => window.history.back()} />
 
-        {loading && (
-          <div className="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg p-3">
-            Loading…
-          </div>
-        )}
-        {err && (
-          <div className="text-sm text-rose-900 bg-rose-50 border border-rose-200 rounded-lg p-3">
-            {err}
-          </div>
-        )}
-        {toast && !err && (
-          <div className="text-sm text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2">
-            {toast}
-          </div>
-        )}
+        <div className="vp-outer">
+          <div className="vp-card-plain">
+            <div className="vp-card-header">
+              <div>
+                <div className="vp-card-title">Receipt</div>
+                <div className="vp-card-subtitle">Thank you for parking with us</div>
+              </div>
 
-        {!loading && !err && session && (
-          <>
-            {/* Plate + Paid */}
-            <div className="flex items-center justify-between mb-3">
-              <PlatePill region={region} plate={plate} />
-              {paid && (
-                <span className="inline-flex items-center text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 text-xs font-semibold">
-                  Paid
-                </span>
+              <div className="vp-icon vp-icon-sm">
+                <span className="vp-icon-emoji">🧾</span>
+              </div>
+            </div>
+
+            <div className="vp-card-body">
+              {loading && <Notice intent="info">Loading…</Notice>}
+              {err && <Notice intent="error">{err}</Notice>}
+              {toast && !err && <div className="vp-mt-sm"><Notice intent="success">{toast}</Notice></div>}
+
+              {!loading && !err && session && (
+                <>
+                  {/* Plate + Paid */}
+                  <div className="vp-receipt-top">
+                    <PlatePill value={`${region} ${plate}`} />
+                    {paid && <span className="vp-paid-badge">Paid</span>}
+                  </div>
+
+                  {/* Summary box like previous steps */}
+                  <div className="vp-summary-box">
+                    <div className="vp-info-row">
+                      <span className="vp-info-label">Entry</span>
+                      <span className="vp-info-value">{fmtTime(session.started_at)}</span>
+                    </div>
+                    <div className="vp-info-row">
+                      <span className="vp-info-label">Exit</span>
+                      <span className="vp-info-value">{fmtTime(session.ended_at)}</span>
+                    </div>
+                    <div className="vp-info-row vp-info-row-strong">
+                      <span className="vp-info-label">Paid</span>
+                      <span className="vp-info-value">{fmtMoney(session.amount_charged, currency)}</span>
+                    </div>
+                  </div>
+
+                  {/* Barcode block */}
+                  <div className="vp-mt">
+                    <div className="vp-barcode-wrap">
+                      <Barcode plateFull={plateFull} sessionId={session.id} />
+                      <div className="vp-address">
+                        {addressTitle} • {addressCity}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Email */}
+                  {!!EMAIL_EP && paid && (
+                    <div className="vp-mt">
+                      <Field
+                        label="Send receipt to email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        type="email"
+                      />
+                      <div className="vp-mt-sm">
+                        <PrimaryButton onClick={sendReceipt} disabled={!isEmail(email) || sending}>
+                          {sending ? "Sending…" : "Send on E-mail"}
+                        </PrimaryButton>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="vp-footer">Session #{session.id}</div>
+
+                  <div className="vp-navbar">NavBar</div>
+                </>
               )}
             </div>
-
-            {/* Entry / Exit / Paid rows */}
-            <ul className="text-sm space-y-1 mb-4">
-              <li>
-                <strong>Entry</strong>&nbsp;{fmtTime(session.started_at)}
-              </li>
-              <li>
-                <strong>Exit</strong>&nbsp;{fmtTime(session.ended_at)}
-              </li>
-              <li>
-                <strong>Paid</strong>&nbsp;{fmtMoney(session.amount_charged, currency)}
-              </li>
-            </ul>
-
-            <Divider />
-
-            {/* Barcode + address */}
-            <Barcode plateFull={plateFull} sessionId={session.id} />
-            <div className="text-xs text-gray-600 mt-2 text-center">
-              {addressTitle} • {addressCity}
-            </div>
-
-
-            {!!EMAIL_EP && paid && (
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Send receipt to email
-                </label>
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  type="email"
-                  placeholder="you@example.com"
-                  className="w-full h-11 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-                <button
-                  onClick={sendReceipt}
-                  disabled={!isEmail(email) || sending}
-                  className={`mt-3 w-full h-11 rounded-xl font-semibold text-white ${
-                    !isEmail(email) || sending
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : "bg-teal-600 hover:bg-teal-700"
-                  }`}
-                >
-                  {sending ? "Sending…" : "Send on E-mail"}
-                </button>
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500 mt-4 text-center">Session #{session.id}</div>
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,445 @@
+
+.vp-screen {
+  min-height: 100vh;
+  background: #f6f8fa;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.vp-phone {
+  width: 390px;
+}
+
+/* Stepper */
+.vp-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.vp-stepper-back,
+.vp-stepper-spacer {
+  width: 32px;
+  height: 32px;
+}
+
+.vp-stepper-back {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+  font-size: 18px;
+}
+
+.vp-stepper-back:hover {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.vp-stepper-mid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.vp-stepper-labels {
+  display: flex;
+  gap: 18px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vp-stepper-label {
+  color: #9ca3af;
+}
+
+.vp-stepper-label-active {
+  color: #111827;
+}
+
+.vp-stepper-dots {
+  display: flex;
+  gap: 26px;
+}
+
+.vp-stepper-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #9ca3af;
+}
+
+.vp-stepper-dot-active {
+  background: #0f766e;
+}
+
+
+.vp-outer {
+  background: #ffffff;
+  border-radius: 44px;
+  box-shadow: 0 22px 55px rgba(17, 24, 39, 0.12);
+  border: 1px solid #eef2f7;
+  padding: 22px;
+}
+
+/* Inner card (content area) */
+.vp-card {
+  background: #ffffff;
+  border-radius: 34px;
+  padding: 22px 18px 18px;
+}
+
+/* For payment/receipt variants that use CardHeader + CardBody */
+.vp-card-plain {
+  border-radius: 34px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.vp-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.vp-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.vp-card-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.vp-card-body {
+  padding: 16px 18px 18px;
+}
+
+/* Lookup header */
+.vp-lookup-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.vp-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: rgba(16, 185, 129, 0.10);
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+}
+
+.vp-icon-emoji {
+  font-size: 26px;
+}
+
+.vp-lookup-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #111827;
+  margin-bottom: 6px;
+}
+
+.vp-lookup-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+  max-width: 28ch;
+}
+
+
+.vp-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 14px;
+}
+
+.vp-field-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.vp-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.vp-field-hint {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.vp-input {
+  width: 100%;
+  height: 44px;
+  border-radius: 16px;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  font-size: 14px;
+  outline: none;
+}
+
+.vp-input:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+}
+
+.vp-input:disabled {
+  background: #f8fafc;
+  color: #111827;
+}
+
+/* Plate pill */
+.vp-plate-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 2px solid #0f766e;
+  background: #ffffff;
+}
+
+.vp-plate-pill-text {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #111827;
+}
+
+.vp-center {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 6px;
+}
+
+/* Buttons */
+.vp-btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 999px;
+  border: none;
+  font-weight: 800;
+  font-size: 18px;
+  cursor: pointer;
+  transition: transform 0.06s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.vp-btn:active {
+  transform: scale(0.99);
+}
+
+.vp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.vp-btn-primary {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.vp-btn-primary:hover {
+  background: #0b625c;
+}
+
+.vp-btn-secondary {
+  margin-top: 10px;
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.vp-btn-secondary:hover {
+  background: #f9fafb;
+}
+
+/* Summary rows */
+.vp-summary-box {
+  border-radius: 22px;
+  background: #f3f4f6;
+  padding: 12px 14px;
+}
+
+.vp-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 2px;
+  font-size: 14px;
+}
+
+.vp-info-row-strong {
+  font-weight: 800;
+}
+
+.vp-info-label {
+  color: #4b5563;
+}
+
+.vp-info-value {
+  color: #111827;
+  font-weight: 700;
+}
+
+/* Notice */
+.vp-notice {
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid;
+  font-size: 13px;
+}
+
+.vp-notice-info {
+  background: #eff6ff;
+  color: #1e3a8a;
+  border-color: #bfdbfe;
+}
+.vp-notice-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+.vp-notice-warn {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fed7aa;
+}
+.vp-notice-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+/* Helpers */
+.vp-mt {
+  margin-top: 14px;
+}
+.vp-mt-sm {
+  margin-top: 10px;
+}
+
+.vp-hint {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.vp-hint-strong {
+  font-weight: 800;
+  color: #111827;
+}
+
+.vp-navbar {
+  margin-top: 22px;
+  height: 56px;
+  border-radius: 22px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.vp-footer {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* mobile */
+@media (max-width: 420px) {
+  .vp-phone {
+    width: 100%;
+  }
+}
+
+
+/* Smaller icon variant (for receipt header) */
+.vp-icon-sm {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+}
+
+/* Receipt top row */
+.vp-receipt-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* Paid badge */
+.vp-paid-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+
+.vp-barcode-wrap {
+  border-radius: 22px;
+  background: #f3f4f6;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+}
+
+.vp-barcode {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vp-barcode-svg {
+  width: 90%;
+  max-width: 340px;
+  height: 96px;
+}
+
+.vp-barcode-caption {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: -6px;
+  letter-spacing: 0.18em;
+  text-align: center;
+}
+
+/* Address text */
+.vp-address {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+}

@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import "./VisitorPortal.css";
 
 const API = (() => {
-const val = (import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL || "").trim();
-if (!val) {
-console.error("Missing API base. Set VITE_API_BASE or VITE_API_BASE_URL in your project root .env");
-}
-return val;
+  const val = (import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL || "").trim();
+  if (!val) console.error("Missing API base. Set VITE_API_BASE or VITE_API_BASE_URL in your project root .env");
+  return val;
 })();
 const EMAIL_EP = import.meta.env.VITE_RECEIPT_EMAIL_ENDPOINT || "";
 
@@ -18,70 +17,149 @@ const fmtMoney = (cents, currency = "EUR") =>
 const fmtTime = (iso) =>
   iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—";
 
-function Button({ children, ...props }) {
+function cn(...xs) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function Notice({ intent = "info", children }) {
+  return <div className={cn("vp-notice", `vp-notice-${intent}`)}>{children}</div>;
+}
+
+function PlatePill({ value }) {
   return (
-    <button
-      {...props}
-      className={`w-full h-11 rounded-xl font-semibold transition-colors ${
-        props.disabled
-          ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-          : "bg-teal-600 text-white hover:bg-teal-700"
-      }`}
-    >
+    <div className="vp-plate-pill">
+      <span className="vp-plate-pill-text">{value || "—"}</span>
+    </div>
+  );
+}
+
+function TopStepper({ step, onBack }) {
+  const items = ["Review", "Payment", "Receipt"];
+  const activeIndex = step === "lookup" ? 0 : step === "summary" ? 1 : 2;
+
+  return (
+    <header className="vp-stepper">
+      <button type="button" onClick={onBack} className="vp-stepper-back" aria-label="Back">
+        &lt;
+      </button>
+
+      <div className="vp-stepper-mid">
+        <div className="vp-stepper-labels">
+          {items.map((label, i) => (
+            <span
+              key={label}
+              className={cn("vp-stepper-label", i === activeIndex && "vp-stepper-label-active")}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+
+        <div className="vp-stepper-dots">
+          {items.map((_, i) => (
+            <span key={i} className={cn("vp-stepper-dot", i === activeIndex && "vp-stepper-dot-active")} />
+          ))}
+        </div>
+      </div>
+
+      <div className="vp-stepper-spacer" />
+    </header>
+  );
+}
+
+function Field({ label, hint, ...props }) {
+  return (
+    <label className="vp-field">
+      <div className="vp-field-top">
+        <span className="vp-field-label">{label}</span>
+        {hint ? <span className="vp-field-hint">{hint}</span> : null}
+      </div>
+      <input className="vp-input" {...props} />
+    </label>
+  );
+}
+
+function Card({ children }) {
+  return <div className="vp-card">{children}</div>;
+}
+
+function CardHeader({ title, subtitle, right }) {
+  return (
+    <div className="vp-card-header">
+      <div>
+        <div className="vp-card-title">{title}</div>
+        {subtitle ? <div className="vp-card-subtitle">{subtitle}</div> : null}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function CardBody({ children }) {
+  return <div className="vp-card-body">{children}</div>;
+}
+
+function InfoRow({ label, value, strong }) {
+  return (
+    <div className={cn("vp-info-row", strong && "vp-info-row-strong")}>
+      <span className="vp-info-label">{label}</span>
+      <span className="vp-info-value">{value}</span>
+    </div>
+  );
+}
+
+function PrimaryButton({ children, ...props }) {
+  return (
+    <button {...props} className="vp-btn vp-btn-primary">
       {children}
     </button>
   );
 }
 
-function Card({ children }) {
+function SecondaryButton({ children, ...props }) {
   return (
-    <div className="max-w-md w-full bg-white rounded-2xl shadow-md border border-gray-100 p-5">
+    <button {...props} className="vp-btn vp-btn-secondary">
       {children}
+    </button>
+  );
+}
+
+function ParkingIcon() {
+  return (
+    <div className="vp-icon">
+      <span className="vp-icon-emoji">🚗</span>
     </div>
   );
 }
 
-function Notice({ intent = "info", children }) {
-  const styles = {
-    info: "bg-blue-50 text-blue-800 border-blue-200",
-    warn: "bg-amber-50 text-amber-900 border-amber-200",
-    error: "bg-rose-50 text-rose-900 border-rose-200",
-    success: "bg-emerald-50 text-emerald-900 border-emerald-200",
-  }[intent];
-  return <div className={`border rounded-lg p-3 text-sm ${styles}`}>{children}</div>;
-}
-
-console.log("VITE_API_BASE =", import.meta.env.VITE_API_BASE);
-console.log("VITE_API_BASE_URL =", import.meta.env.VITE_API_BASE_URL);
-
-
 export default function VisitorPortal() {
   const [params] = useSearchParams();
 
+  const REGION_LOCKED = "BG";
+
   const [step, setStep] = useState("lookup"); // lookup | summary | receipt
-  const [region, setRegion] = useState("BP");
   const [plate, setPlate] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
   const [sessionId, setSessionId] = useState(null);
-  const [quote, setQuote] = useState(null); // { amount_cents, currency, minutes_billable }
+  const [quote, setQuote] = useState(null);
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState("");
 
-  const prettyPlate = useMemo(
-    () => `${region.toUpperCase()} ${plate.toUpperCase().replace(/\s+/g, "")}`,
-    [region, plate]
-  );
+  const normalizedPlate = useMemo(() => (plate || "").toUpperCase().replace(/\s+/g, ""), [plate]);
+  const prettyPlate = useMemo(() => `${REGION_LOCKED} ${normalizedPlate}`.trim(), [normalizedPlate]);
 
   async function callExitScan(opts = {}) {
-    const r = (opts.regionCode ?? region).toUpperCase();
+    const r = REGION_LOCKED;
     const p = (opts.plateText ?? plate).toUpperCase().replace(/\s+/g, "");
+
     setErr("");
-    if (!r || !p || p.length < 4) {
+    if (!p || p.length < 4) {
       setErr("Enter a valid plate (min 4 characters).");
       return;
     }
+
     try {
       setLoading(true);
       const res = await fetch(`${API}/scans/exit`, {
@@ -141,15 +219,13 @@ export default function VisitorPortal() {
     if (!sessionId) return;
     try {
       setLoading(true);
-      const res = await fetch(
-        `${API}/payments/checkout?session_id=${encodeURIComponent(sessionId)}`,
-        { method: "POST" }
-      );
+      const res = await fetch(`${API}/payments/checkout?session_id=${encodeURIComponent(sessionId)}`, {
+        method: "POST",
+      });
       if (!res.ok) throw new Error(`Checkout failed (${res.status})`);
       const data = await res.json();
       if (!data.checkout_url) throw new Error("No checkout_url returned");
 
-      // remember session for after redirect
       sessionStorage.setItem("visitor.session_id", String(sessionId));
       window.location.href = data.checkout_url;
     } catch (e) {
@@ -189,218 +265,201 @@ export default function VisitorPortal() {
     }
   }
 
-  // Auto-load: ?session_id=... OR ?region=..&plate=.. OR stored session after Stripe
   useEffect(() => {
-  const sid = params.get("session_id");
-  const reg = params.get("region");
-  const pla = params.get("plate");
-  const storedSid = sessionStorage.getItem("visitor.session_id"); // numeric parking session id we saved before redirect
+    const sid = params.get("session_id");
+    const pla = params.get("plate");
+    const storedSid = sessionStorage.getItem("visitor.session_id");
 
-
-  if (sid) {
-    if (sid.startsWith("cs_")) {
-      if (storedSid) {
-        setSessionId(storedSid);
-        refreshSession(storedSid); // will flip to receipt once webhook closes it
-        return;
-      }
-      // (optional) if no storedSid, try a backend resolver:
-      // fetch(`${API}/payments/resolve?cs=${encodeURIComponent(sid)}`)
-      //   .then(r => r.ok ? r.json() : Promise.reject())
-      //   .then(({ session_id }) => { setSessionId(session_id); refreshSession(session_id); })
-      //   .catch(() => {/* fall back to lookup UI */});
-    } else {
-
-      setSessionId(sid);
-      (async () => {
-        try {
-          const s = await fetch(`${API}/sessions/${sid}`).then(r => r.json());
-          setSession(s);
-          if (s?.status === "awaiting_payment") {
-            setQuote({
-              amount_cents: s.amount_charged,
-              currency: (s.plan && s.plan.currency) || "EUR",
-              minutes_billable: s.duration,
-            });
-            setStep("summary");
-          } else {
-            setStep("receipt");
-          }
-        } catch (e) {
-          console.error(e);
+    if (sid) {
+      if (sid.startsWith("cs_")) {
+        if (storedSid) {
+          setSessionId(storedSid);
+          refreshSession(storedSid);
+          return;
         }
-      })();
+      } else {
+        setSessionId(sid);
+        (async () => {
+          try {
+            const s = await fetch(`${API}/sessions/${sid}`).then((r) => r.json());
+            setSession(s);
+            if (s?.status === "awaiting_payment") {
+              setQuote({
+                amount_cents: s.amount_charged,
+                currency: (s.plan && s.plan.currency) || "EUR",
+                minutes_billable: s.duration,
+              });
+              setStep("summary");
+            } else {
+              setStep("receipt");
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        })();
+      }
+      return;
     }
-    return;
-  }
 
-  // Region + plate deep link (kiosk flow)
-  if (reg && pla) {
-    setRegion(reg.toUpperCase());
-    setPlate(pla.toUpperCase());
-    callExitScan({ regionCode: reg, plateText: pla });
-    return;
-  }
+    if (pla) {
+      setPlate(pla.toUpperCase());
+      callExitScan({ plateText: pla });
+      return;
+    }
 
-  // Returning from Stripe without params? Use the stored session id.
-  if (storedSid) {
-    setSessionId(storedSid);
-    refreshSession(storedSid);
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-
+    if (storedSid) {
+      setSessionId(storedSid);
+      refreshSession(storedSid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center p-4">
-      {step === "lookup" && (
-        <Card>
-          <div className="text-xl font-semibold mb-1">Welcome to Petroff Parking</div>
-          <div className="text-xs text-gray-500 mb-4">Visitor checkout</div>
+    <div className="vp-screen">
+      <div className="vp-phone">
+        <TopStepper step={step} onBack={() => window.history.back()} />
 
-          <label className="block mb-3">
-            <div className="text-sm font-medium text-gray-700 mb-1">Region code</div>
-            <input
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              className="w-full h-11 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </label>
-
-          <label className="block mb-3">
-            <div className="text-sm font-medium text-gray-700 mb-1">License plate</div>
-            <input
-              value={plate}
-              onChange={(e) => setPlate(e.target.value)}
-              placeholder="e.g., NN18267"
-              className="w-full h-11 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </label>
-
-          {err && (
-            <div className="mb-3">
-              <Notice intent="error">{err}</Notice>
-            </div>
-          )}
-
-          <Button onClick={() => callExitScan()} disabled={loading}>
-            {loading ? "Checking..." : "Proceed to Payment"}
-          </Button>
-
-          <div className="text-xs text-gray-500 mt-3">
-            We’ll look up your exit and calculate the fee for plate <b>{prettyPlate}</b>.
-          </div>
-        </Card>
-      )}
-
-      {step === "summary" && (
-        <Card>
-          <div className="text-xl font-semibold mb-2">Payment</div>
-          <div className="text-sm text-gray-600 mb-4">
-            Plate <span className="font-semibold">{prettyPlate}</span>
-          </div>
-
-          <ul className="text-sm space-y-2">
-            <li className="flex justify-between">
-              <span>Entered</span>
-              <span>{fmtTime(session?.started_at)}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Exit</span>
-              <span>{fmtTime(session?.ended_at)}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Rate</span>
-              <span>per your visitor plan</span>
-            </li>
-            <li className="flex justify-between font-semibold">
-              <span>Total Due</span>
-              <span>{fmtMoney(quote?.amount_cents, quote?.currency || "EUR")}</span>
-            </li>
-          </ul>
-
-          {err && (
-            <div className="mt-3">
-              <Notice intent="error">{err}</Notice>
-            </div>
-          )}
-
-          <div className="mt-4">
-            <Button onClick={startCheckout} disabled={loading}>
-              {loading ? "Redirecting..." : `Pay ${fmtMoney(quote?.amount_cents, quote?.currency || "EUR")} now`}
-            </Button>
-          </div>
-
-          <div className="mt-3">
-            <Button onClick={() => refreshSession()} type="button">
-              I’ve paid — Check status
-            </Button>
-          </div>
-
-          <div className="text-xs text-gray-500 mt-3">
-            After payment, the barrier will open automatically. If you don’t return here from Stripe, you can still
-            press “I’ve paid — Check status”.
-          </div>
-        </Card>
-      )}
-
-      {step === "receipt" && (
-        <Card>
-          <div className="text-xl font-semibold mb-2">Receipt</div>
-          {session?.status === "paid" || session?.status === "closed" ? (
-            <>
-              <ul className="text-sm space-y-2">
-                <li className="flex justify-between">
-                  <span>Status</span>
-                  <span className="font-semibold capitalize">{session?.status}</span>
-                </li>
-                <li className="flex justify-between">
-                  <span>Plate</span>
-                  <span className="font-semibold">{prettyPlate}</span>
-                </li>
-                <li className="flex justify-between">
-                  <span>Entry</span>
-                  <span>{fmtTime(session?.started_at)}</span>
-                </li>
-                <li className="flex justify-between">
-                  <span>Exit</span>
-                  <span>{fmtTime(session?.ended_at)}</span>
-                </li>
-                <li className="flex justify-between font-semibold">
-                  <span>Paid</span>
-                  <span>{fmtMoney(session?.amount_charged, (session?.plan && session.plan.currency) || "EUR")}</span>
-                </li>
-              </ul>
-
-              {!!EMAIL_EP && (
-                <div className="mt-4">
-                  <label className="block mb-3">
-                    <div className="text-sm font-medium text-gray-700 mb-1">Send receipt to email</div>
-                    <input
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full h-11 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </label>
-                  <Button onClick={sendReceipt} disabled={!email || loading}>
-                    Send on E-mail
-                  </Button>
-                </div>
-              )}
-
-              <div className="text-xs text-gray-500 mt-3">Session #{session?.id}</div>
-            </>
-          ) : (
-            <>
-              <Notice intent="warn">Waiting for payment confirmation…</Notice>
-              <div className="mt-3">
-                <Button onClick={() => refreshSession()}>Refresh</Button>
+        {/* Outer rounded container like your screenshot */}
+        <div className="vp-outer">
+          {step === "lookup" && (
+            <Card>
+              <div className="vp-lookup-header">
+                <ParkingIcon />
+                <div className="vp-lookup-title">Welcome to Petroff Parking</div>
+                <div className="vp-lookup-subtitle">Enter your license plate to proceed to payment.</div>
               </div>
-            </>
+
+              <div className="vp-grid-2">
+                <Field label="Region" value={REGION_LOCKED} disabled />
+                <Field
+                  label="Plate"
+                  hint="min 4 chars"
+                  value={plate}
+                  onChange={(e) => setPlate(e.target.value)}
+                  placeholder="NN18267"
+                />
+              </div>
+
+              <div className="vp-center">
+                <PlatePill value={prettyPlate || "BG —"} />
+              </div>
+
+              {err ? (
+                <div className="vp-mt">
+                  <Notice intent="error">{err}</Notice>
+                </div>
+              ) : null}
+
+              <div className="vp-mt">
+                <PrimaryButton onClick={() => callExitScan()} disabled={loading}>
+                  {loading ? "Checking…" : "Proceed to Payment"}
+                </PrimaryButton>
+              </div>
+
+              <div className="vp-hint">
+                We’ll look up your parking session and calculate the fee for plate{" "}
+                <span className="vp-hint-strong">{REGION_LOCKED}</span>.
+              </div>
+
+              <div className="vp-navbar">NavBar</div>
+            </Card>
           )}
-        </Card>
-      )}
+
+          {step === "summary" && (
+            <div className="vp-card-plain">
+              <CardHeader
+                title="Payment"
+                subtitle={<PlatePill value={prettyPlate} />}
+                right={<ParkingIcon />}
+              />
+              <CardBody>
+                <div className="vp-summary-box">
+                  <InfoRow label="Entered" value={fmtTime(session?.started_at)} />
+                  <InfoRow label="Exit time" value={fmtTime(session?.ended_at)} />
+                  <InfoRow label="Rate" value="Per your visitor plan" />
+                  <InfoRow strong label="Total Due" value={fmtMoney(quote?.amount_cents, quote?.currency || "EUR")} />
+                </div>
+
+                {err ? (
+                  <div className="vp-mt">
+                    <Notice intent="error">{err}</Notice>
+                  </div>
+                ) : null}
+
+                <div className="vp-mt">
+                  <PrimaryButton onClick={startCheckout} disabled={loading}>
+                    {loading ? "Redirecting…" : `Pay ${fmtMoney(quote?.amount_cents, quote?.currency || "EUR")} now`}
+                  </PrimaryButton>
+                </div>
+
+                <div className="vp-mt-sm">
+                  <SecondaryButton onClick={() => refreshSession()} type="button" disabled={loading}>
+                    I’ve paid — Check status
+                  </SecondaryButton>
+                </div>
+
+                <div className="vp-hint">
+                  After payment, the barrier opens automatically. If Stripe doesn’t bring you back here, you can still
+                  use “I’ve paid — Check status”.
+                </div>
+
+                <div className="vp-navbar">NavBar</div>
+              </CardBody>
+            </div>
+          )}
+
+          {step === "receipt" && (
+            <div className="vp-card-plain">
+              <CardHeader title="Receipt" subtitle="Parking session details" right={<ParkingIcon />} />
+              <CardBody>
+                {session?.status === "paid" || session?.status === "closed" ? (
+                  <>
+                    <div className="vp-summary-box">
+                      <InfoRow label="Plate" value={prettyPlate} strong />
+                      <InfoRow label="Entry" value={fmtTime(session?.started_at)} />
+                      <InfoRow label="Exit" value={fmtTime(session?.ended_at)} />
+                      <InfoRow
+                        strong
+                        label="Paid"
+                        value={fmtMoney(session?.amount_charged, (session?.plan && session.plan.currency) || "EUR")}
+                      />
+                    </div>
+
+                    {!!EMAIL_EP && (
+                      <div className="vp-mt">
+                        <Field
+                          label="Send receipt to email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@example.com"
+                        />
+                        <div className="vp-mt-sm">
+                          <PrimaryButton onClick={sendReceipt} disabled={!email || loading}>
+                            {loading ? "Sending…" : "Send on E-mail"}
+                          </PrimaryButton>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="vp-footer">Session #{session?.id}</div>
+                  </>
+                ) : (
+                  <>
+                    <Notice intent="warn">Waiting for payment confirmation…</Notice>
+                    <div className="vp-mt">
+                      <PrimaryButton onClick={() => refreshSession()} disabled={loading}>
+                        {loading ? "Refreshing…" : "Refresh"}
+                      </PrimaryButton>
+                    </div>
+                  </>
+                )}
+
+                <div className="vp-navbar">NavBar</div>
+              </CardBody>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
